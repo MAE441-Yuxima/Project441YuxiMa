@@ -1,0 +1,365 @@
+---
+title: "430_HW3_Yuxi Ma_205638409"
+author: "Yuxi Ma"
+date: "11/22/2020"
+output:
+  pdf_document:
+    toc: yes
+    latex_engine: xelatex
+---
+
+# I. Introduction
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls(all=TRUE))
+library(quantmod)
+library(aTSA)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(car)
+library(pastecs)
+library(lattice)
+library(foreign)
+library(MASS)
+library(car)
+require(stats)
+require(stats4)
+library(KernSmooth)
+library(fastICA)
+library(cluster)
+library(leaps)
+library(mgcv)
+library(rpart)
+library(pan)
+library(mgcv)
+library(DAAG)
+library("TTR")
+library(tis)
+require("datasets")
+require(graphics)
+library("forecast")
+#install.packages("astsa")
+require(astsa)
+library(xtable)
+library(stats)
+library(tidyverse)
+library(AER)
+library(broom)
+#install.packages("PoEdata")
+#library(PoEdata)
+library(leaps)
+library(caret)
+library(AER)
+#install.packages("Metrics")
+library(Metrics)
+
+#Read S&P500 Data
+quantmod::getSymbols("^GSPC", from="2000-01-01", to="2020-11-22")
+GSPC = as.data.frame(GSPC)
+GSPC$Date = rownames(GSPC)
+```
+In this homework, the time series data picked is S&P 500. The reason for choosing this data series is because compared with other countries, the stock market in the U.S. is expected to be the most efficient, which means that the index return may tend to be random as there should be no trend in return series otherwise there will be arbitrage opportunities. Therefore, this homework adopt the most common used index, S&P 500 to dive deeper to see whether the selected returns are efficient or not.
+
+# II. Results
+## 1. Modeling and Forecasting Trend
+### (a) Show a time-series plot of your data.
+```{r}
+plot(GSPC$GSPC.Adjusted, type='n', ylab="Adjusted S&P500 return", xlab = "From 2000-1-3 to 2020-11-20")
+nberShade()
+lines(GSPC$GSPC.Adjusted)
+```
+In the graph above, I leveraged the adjusted price, and also the shaded area depicted the recession period. From the graph, we can see that the overall trend is increasing. And if combining with the shaded recession period, we can see that the return of S&P500 only started to fall significantly when the recession has ended. As the stock market should be one leading indicator for the economy, this observation may due to the momentum effect or maybe the market being not that efficient.
+
+### (b) Does your plot in (a) suggest that the data are covariance stationary? Explain your answer.
+Answer: If only via observation, I will say that maybe for the most part it is covariance stationary, as the range the return fluctuated does not experience apparent difference. However, for some period, to be specific, the part right after the recession and the ending part do not seem to be covariance stationary, they seem to be more volatile. This may be explained by the 2008 great recession and the recent global recession due to the impact of covid-19.
+
+### (c) Plot and discuss the ACF and PACF of your data.
+Answer:
+```{r}
+par(mfrow=c(2,1), mar=c(2, 2, 3, 1) + 0.1)
+acf(GSPC$GSPC.Adjusted, type = "correlation", main = "Autocorrelation Function")
+pacf(GSPC$GSPC.Adjusted, main = "Partial Autocorrleation Function")
+```
+Some observations from the ACF & PACF graphs above:
+1>From ACF, all the lag terms identified here are autocorrelated, as their values on y-axis all fall above 0.8 (notice that the correlation ranges *(-1, 1)*).
+2>From PACF, approximately only the first-order lag is autocorrelated significantly while others can be viewed to fall within the interval estimates.
+Based on the result of PACF, it's better to include the first-order lag variable in the final regression equation, ang this also implied that the data series tend to be first-order stationary. To test whether this data series is I(1) or not, I directly plot the first difference of the original data.
+```{r}
+plot(diff(GSPC$GSPC.Adjusted), type='n', ylab="First difference of Adjusted S&P500 return", xlab = "From 2000-1-3 to 2020-11-20")
+nberShade()
+lines(diff(GSPC$GSPC.Adjusted))
+```
+From the graph above, I will say that the series tend to be covariance stationary except for the 2 periods I mentioned in part (b) (the one right after the 2008 great recession and the most recent recession). It may look not that nice, this is expected to be partially caused by including too many dates here. As it covers a quite long time period, making the data condensed a lot, which may exaggerate the volatility of returns.
+
+### (d) Fit a linear and nonlinear (e.g., polynomial, exponential, quadratic + periodic, etc.) model to your series. In one window, show both figures of the original times series plot with the respective fit.
+Answer:
+```{r}
+# Convert data to time series format:
+GSPC_ts<-ts(GSPC$GSPC.Adjusted,start=2000, frequency = 365)
+t<-seq(2000, 2020,length=length(GSPC_ts))
+
+#Model 1: Linear Fit
+m1=lm(GSPC_ts~t)
+plot(GSPC_ts, ylab="Adjusted S&P500 return", xlab="From 2000-1-3 to 2020-11-20", lwd=2, col='skyblue3')
+lines(t, m1$fit,col="red3",lwd=2)
+```
+From the graph above, the linear model does not seem to fit the data well.
+
+```{r}
+#Model 2: Exponential Fit
+ds=data.frame(x=t/100, y=GSPC_ts/100)
+m2=nls(y ~ exp(a + b * x), data=ds, start = list(a = 0, b = 0))
+plot(t/100, GSPC_ts/100, ylab="Adjusted S&P500 return", xlab="From 2000-1-3 to 2020-11-20", lwd=2, col='skyblue3')
+lines(ds$x, predict(m2, list(x = ds$x)),col="red3",lwd=2)
+```
+Compared with the linear model, the exponential model fits the data better.
+
+```{r}
+#Model 3: quadratic-periodic
+t2<-t^2
+sin.t<-sin(2*pi*t)
+cos.t<-cos(2*pi*t)
+m3=lm(GSPC_ts~t+t2+sin.t+cos.t)
+plot(GSPC_ts,xlab="From 2000-1-3 to 2020-11-20", ylab="Adjusted S&P500 return")
+lines(t, m3$fit,col="red3",lwd=2)
+```
+As the graph suggests, at the beginning, the model's not bad, as the data at least tends to mean revert to the fitted line. However, when time passes by, the original returns seem to overperform what the model predicted.
+
+```{r}
+#Model 4: Log-Linear Fit
+m4=lm(log(GSPC_ts) ~ t)  
+plot(log(GSPC_ts),xlab="From 2000-1-3 to 2020-11-20", ylab="Adjusted S&P500 return", lwd=2, col='skyblue3')
+lines(t,m4$fit,col="red3",lwd=2)
+```
+From the graph, the log-linear model also seems not bad. If to rate these 4 models, I will rank the exponential model first, then follows log-linear model, then linear and quadratic-periodic ones.
+
+### (e) For each model, plot the respective residuals vs. fitted values and discuss your observa- tions.
+Answer:
+```{r}
+#Model 1: Linear Fit
+plot(t,m1$res, ylab="Residuals",type='l',xlab="From 2000-1-3 to 2020-11-20")
+```
+From Model 1's residual plot, we can see that it distributes approximately symmetric around 0 with a bit of large values in the upper end. For variability level, along the process it seems to be stable with only one quite volatile period in the end, which may due to the impact of recent virus.
+
+```{r}
+#Model 2: Exponential Fit
+plot(t/100,residuals(m2), ylab="Residuals",type='l',xlab="From 2000-1-3 to 2020-11-20")
+summary(m2)
+```
+The residual plot for Model 2 reveals similar pattern as that for Model 1. The residuals distribute approximately symmetric around 0.
+
+```{r}
+#Model 3: Quadratic-periodic Fit
+plot(t,residuals(m3), ylab="Residuals",type='l',xlab="From 2000-1-3 to 2020-11-20")
+```
+As shown in the graph above, the residuals seem to have some extreme negative values recently, which may mean that due to covid-19, the return for S&P500 are significantly adversely effected. In addtion, the distribution of returns looks a bit better than the previous two models as it shows a more apparent pattern fluctuating around 0.
+
+```{r}
+#Model 4: Log-Linear Fit
+plot(t,m4$res, ylab="Residuals",type='l',xlab="From 2000-1-3 to 2020-11-20")
+```
+If only by looking at the residual plots, this model, Model 4, does not seem to look better than the previous three as there are a group of significant negative values. However, the advantage of log function to stable the data does seem to work here as the variability is not that large in the recent period (which shows siginificant volatility in all previous 3 models).
+
+### (f) For each model, plot a histogram of the residuals and discuss your observations.
+Answer:
+```{r}
+truehist(m1$res,col="skyblue3", xlab="From 2000-1-3 to 2020-11-20",main="Model 1 Residuals")
+lines(density(m1$res),lwd=2,col="red3")
+```
+From the histogram, it can be seen that there are some outliers in both ends which makes the distribution not normal, as there are 2 small peaks in both ends, which the one on the lower bound being more significant.
+
+```{r}
+truehist(residuals(m2),col="skyblue3", xlab="From 2000-1-3 to 2020-11-20",main="Model 2 Residuals")
+lines(density(residuals(m2)),lwd=2,col="red3")
+```
+The similar distribution as Model 1 appears here, however, in Model 2, the upper end seems smoother while the lower end still has some significant outliers leading to a non-normal distribution.
+
+```{r}
+truehist(m3$res,col="skyblue3", xlab="From 2000-1-3 to 2020-11-20",main="Model 3 Residuals")
+lines(density(m3$res),lwd=2,col="red3")
+```
+In Model 3's residual histogram, there're not that much outliers in the lower end. However, the distribution is clearly negatively skewed, with larger proportion of data falls in the upper end.
+
+```{r}
+truehist(m4$res,col="skyblue3", xlab="From 2000-1-3 to 2020-11-20",main="Model 4 Residuals")
+lines(density(m4$res),lwd=2,col="red3")
+```
+Model 4's residual histogram also reveals similar outlier problem with significant amount of them in the lower end making the distribution not normal. At the same time, fairly speaking, the distribution is relatively most close to normality among these 4 models listed above.
+
+### (g) For each model, discuss the associated diagnostic statistics (R2, t−distribution, F−distribution, etc.)
+Answer:
+```{r}
+#tail(unlist(summary(m1)))
+names(summary(m1))
+names(summary(m2))
+names(summary(m3))
+R2 = c(summary(m1)$r.squared, summary(m3)$r.squared, summary(m4)$r.squared)
+`F` = c(summary(m1)$fstatistic[1], summary(m3)$fstatistic[1], summary(m4)$fstatistic[1])
+DiaTable = data.frame(R2, F)
+rownames(DiaTable) <- c("Model 1", "Model 3", "Model 4")
+DiaTable
+```
+As Model 2 is non-linear, it does not have the exact same $R^2$ and F-statistics as the other linear models, so here I only included Model 1, Model 3, and Model 4.
+
+Here're some observations form the descriptive table above:
+1>R^2^: relatively speaking, Model 3: Quadratic-periodic Fit performs the best among these 3 as it has the largest R^2^. The value 0.9293400 suggests that with 95% degree of confident, approximately 93% of original data can be explained by the fitted model 3. However, another thing to note here, in time series data, R^2^ always performs better than in the cross-sectional dataset. Further, R^2^ is generally regarded as a biased standard to measure the fitness of model in time series data.
+
+2>F-statistics: the same conclusion derived here, Model 3 seems to be the most significant among the 3 models listed here as it has the largest F-statistics, which means that it is much easier to reject the null that all the regressors are 0, and this means that it is relatively more likely that all the predictors in Model 3 are significant.
+
+### (h) Select a trend model using AIC and one using BIC (show the values obtained from each criterion). Do the selected models agree?
+Answer:
+```{r}
+AIC = AIC(m1,m2,m3,m4)
+BIC = BIC(m1,m2,m3,m4)
+cbind(AIC, BIC[2])
+```
+As the criteria for AIC & BIC is to choose the minimum ones. As the table shows, AIC & BIC in this case agree in the final conclusion, they both identify Model 4 as the best as Model 4 reveals the minimum value in both.
+
+### (i) Use your preferred model to forecast h-steps (at least 16) ahead. Your forecast should include the respective uncertainty prediction interval. Depending on your data, h will be in days, months, years, etc.
+Answer:
+As shown in part (h), I leverage Model 4 here.
+```{r}
+#First separate data into training and testing part
+which(GSPC$Date == "2015-01-02") #3774
+train_GSPC = GSPC[1:3773, ]
+test_GSPC = GSPC[3774:nrow(GSPC), ]
+
+#Convert both dataset into time series pattern
+GSPCtrain_ts<-ts(train_GSPC$GSPC.Adjusted,start=2000, frequency = 360)
+max(train_GSPC$Date) #2020-11-20
+t_train<-seq(2000, 2015,length=length(GSPCtrain_ts))
+
+GSPCtest_ts<-ts(test_GSPC$GSPC.Adjusted,start=2015, frequency = 360)
+max(test_GSPC$Date) #2020-11-20
+t_test<-seq(2015, 2020,length=length(test_GSPC))
+
+#Prediction
+tn=data.frame(t_train=seq(2015,2020, 0.004))
+
+pred=predict(lm(log(GSPCtrain_ts) ~ t_train), tn, se.fit = TRUE)
+pred.plim = predict(lm(log(GSPCtrain_ts) ~ t_train),tn, level =0.95, interval="prediction")
+head(pred.plim)
+pred.clim = predict(lm(log(GSPCtrain_ts) ~ t_train),tn,level=0.95, interval="confidence")
+matplot(tn$t_train, cbind(exp(pred.clim), exp(pred.plim[,-1])),
+        lty=c(1,1,1,3,3), type="l", lwd=2, ylab="predicted y",xlab="Time")
+```
+As the original data is measured in days, here I also adopt the same measurement. The final 2 outputs can be summarized as follows:
+1>The first table gives the prediction intervals of the testing subset, which detailed to each testing time point I specified at the beginning of this chrunk. The first column "fit" gives the estimated central points for the intervals, the second column gives the lower bounds and the third one provides upper bounds.
+2>The second graph depicts the estimated value and the respective confidence and prediction intervals. The prediction seems to make sense. If going back to part (a) where I draw the time series plot coving the whole period from 2000 to 2020, we can see that the overall trend is increasing, which is also the case here in the predicted values for years 2015 to 2020.
+
+## 2. Modeling and Forecasting Seasonality
+### (a) Construct and test (by looking at the diagnostic statistics) a model with a full set of seasonal dummies.
+Answer:
+```{r}
+#Read the monthly data
+quantmod::getSymbols("^GSPC", from="2000-01-01", to="2020-11-22")
+GSPC = periodReturn(GSPC,period='monthly')
+GSPC = as.data.frame(GSPC)
+
+y =ts(GSPC$monthly.returns, frequency=12)
+t<-seq(2000, 2020,length=length(y))
+
+fit=tslm(y ~ season)
+fit
+```
+Via directly using *tslm* and setting frequancy to be 12, the model automatically regards one month as a season. Having this in mind, the result here gives the estimated impact of each month on the monthly returns and the base model is season 1 which, according to the raw data, stands for January. 
+
+Briefly speaking, the negative estimate means that holding others constant, in this specific month, the return tends to be lower than the return in January. Similarly, positive estimate means that the monthly return is expected to be higher than the January return.
+
+In addition, the intercept here means in January, the S&P500 monthly return estimated by this model will be -0.002911 plus an error term.
+
+```{r}
+#Diagnostic statistics
+data.frame(F = summary(fit)$fstatistic[1], R2 = summary(fit)$r.squared)
+```
+From the diagnostic statistics above, the following conclusions can be reached:
+1>The F-statistics seems to be large, which is a good phonomenon as it becomes more likely to reject the null hypothesis stating that all the seasonality factors are insignificant.
+2>The R^2^ appears to have a unexpected small value, it means that approximately only 4.5% of the raw data can be explained by the model built here. However, as stated before, R^2^ is not that useful in time series model as R^2^ tends to be bias in this case.
+
+Besides, the expected inaccurate R^2^ can cause many statistics to be invalid, such as the normal test statistics we adopt, like the t-statistics, p-value, and F-statisctics. Therefore, the diagnostic statistics stated above is just a reference, we cannot totally reply on them.
+
+### (b) Plot the estimated seasonal factors and interpret your plot.
+Answer:
+```{r}
+plot(y,main="S&P 500 Monthly Returns: Seasonality")
+lines(fit$fitted.values, col="red")
+```
+From teh seasonality capture above we can see that this seasonality model does not seem to fit the data as well as expected. Apparently, the original data is much volatile than the path figured out by this seasonality model.
+
+### (c) In order to improve your model, add the trend model from problem 1 to your seasonal model. We will refer to this model as the full model. For the full model, plot the respective residuals vs. fitted values and discuss your observation
+Answer:
+```{r}
+full=tslm(y ~ trend+ season)
+```
+
+```{r}
+#Plot the residuals vs. fitted values
+scatterplot(full$res~full$fitted.values, ylab="Residuals",xlab="Fitted Values")
+```
+From the Residual versus Fitted value plot, this model acutally performs not bad. 
+
+First, the residual can be viewed mean reverting to 0 with only 1 or 2 outliers in the lower end. 
+
+Second, most of the data falls with the 95% confidence interval depicted in the graph. Although there're a proportion of observatons fall behind, overall they are still symmetric, which may mitigate the possible bad impact introduced by those points falling outside of the 95% intervals. 
+
+Third, the residuals tend to be covariance stationary, as the variability seems to be stable all along the process. 
+
+### (d) Interpret the respective summary statistics including the error metrics of your full model.
+Answer:
+```{r}
+summary(full)
+```
+From the regression table above we can see that for 5% siginificance level, only the trend estimate is significant. This result is actually within the expectation as we already saw in previous part (c) that the seasonality does not perform well.
+
+```{r}
+#Error matrix
+RMSE(full$fitted.values, y)
+```
+RMSE stands for the root mean squared error, which is an excellent general-purpose error metric for numerical predictions. It compares the predicted value and original value, measuring how well a regression line fits the data points. The result of 0.0422303, which is good for a linear model because in this case, it means that the deviation of the estimated value from the true value is quite small. In other word, it means that the model fits the original data quite well. 
+
+### (e) Use the full model to forecast h-steps (at least 16) ahead. Your forecast should include the respective prediction interval.
+Answer:
+```{r}
+fullpred = forecast(full,h=24)
+summary(fullpred)
+plot(forecast(full, h=24, prediction.interval = TRUE,level=95), ylab = "S&P500 Monthly Returns", xlab = "From 2000 to 2020 with 24 prection months ahead")
+```
+From the graph above, I come up with the following conclusions:
+1>The data covers the time period from year 2000 to 2020 (which is the training part), together with 24 months being predicted ahead, so the total time-range is 2000 to 2022, which is also the range for x-axis.
+2>The plot depicted also reveals the same problem as discussed in the only seasonality model, the original data's volatility is underestimated by the model. In the testing range, it's apparent to see that the fluctuation range shrinks as the fitted model is much less volatile.
+3>However, the forecast intervals seem to perform better than the point estimate, as if approximating from the training dataset, the prediction intervals after Year2020 cover the volatility range of the majority of data.
+
+### (f) Plot the STL decomposition plot, and based on it, choose between an additive and multiplicative seasonal adjustment. Perform the correction, and plot the seasonally adjusted series. Based on this adjustment, would your trend model from problem 1 still be appropriate? Explain your answer in detail.
+Answer:
+```{r}
+#Step 1: Decompose
+plot(stl(y,s.window="periodic"))
+```
+From the decomposition above, the seasonal fluctuations do not vary much by time, so here the additive seasonal adjustment may be preferred.
+```{r}
+#Step 2: Perform the correction
+y_adjust = y - fit$fitted.values
+#Step 3: Plot the seasonally adjusted series
+plot(y_adjust, type='n', ylab="Adjusted S&P500 monthly return", xlab = "From 2000-1 to 2020-11")
+lines(y_adjust)
+```
+In step 2, I subtracted the fitted values from the model *fit* from the original data points recalling that *fit* is the model that considers seasonal influences only. By doing this, I remove the seasonal factors away from the original series accoridng to the rule of additive seasonal adjustment.
+
+In step 3, after plotting the seasonal adjusted returns, it does not appear to have trends in it. Instead, the pattern seems to mean revert to value 0 with no apparent trend embedded.
+
+# III. Conclusions and Future Work (state your conclusion regarding your final model and forecast, and provide some insight as to how it could be improved)
+Answer:
+Conclusion:
+So for, we go through 4 trend models (linear, exponential, quadratic-periodic, and log-linear fit) and 1 monthly seasonal model and the final one combines seasonal influence and trend estimate. Via 1>looking at the diagnostic statistics like RMSE, R^2^, and F-statistics, 2>plotting the fitted values and errors, and 3>decomposing the original data series, I compared the performance of all these models and finally decided to choose the Model 4: Log-linear Fit in the trend-depicting to be the best among all these. The reasons are as follows:
+1>From the final seasonality model building, plotting and predicting, we already saw that the seasonal depiction, modeling table as well as forecast do not perform as well as expected. This may imply that there is no significant seasonal trends in this dataset. That's why I directly leave seasonal model apart.
+2>From all the 4 trend models, by looking at the diagnostic statistics such as AIC, BIC, R^2^, and RMSE, Model 4 always performs the best. Based on the agreement among these indicators, I finally picked Model 4: Log-linear Fit.
+
+Future Work:
+As can be seen in the previous parts, even Model 4 is not that satisfying to fit the original data series. Therefore in the future work, I may tend to 1>detect and dig out more practical and decent models to fit and forecast the monthly returns better, 2>look for more significant predictors to include in the final model. As we all know, the financial market is complicated, with both scientific and art in it. Therefore, forecasting is never an easy work, an analyst has to consider not only the objective market characteristics, but also the subjective investors' psychology.
+
+# IV. References (include the source of your data and any other resources).
+Answer:
+In this assignment, my data comes from the open source of Yahoo Finance (url: https://sg.finance.yahoo.com/quote/%5EGSPC?p=%5EGSPC) and I approach to the dataset by leveraging the *quantmod* package. 
+
+The main sourse of my code is the R code posted by Prof.Rojas on CCLE and also by self-search on Google. 

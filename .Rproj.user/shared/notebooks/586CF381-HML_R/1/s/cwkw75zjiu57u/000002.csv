@@ -1,0 +1,51 @@
+"0","```r
+
+
+#LET'S FIRST GET ALL THE CRSP  DATA and Merge them together
+
+### LOAD CRSP FROM WRDS ###
+
+# SLOW CODE (30 mins)
+crspa_msf <- dbSendQuery(wrds, \"select DATE, PERMNO, PERMCO, CFACPR, CFACSHR, SHROUT, PRC, RET, RETX, VOL
+                         from CRSP.MSF\")
+
+crsp.msf <- dbFetch(crspa_msf, n = -1) 
+
+
+crspa_mse <- dbSendQuery(wrds, \"select DATE, PERMNO, SHRCD, EXCHCD, SICCD
+                   from CRSP.MSE\")
+
+crsp.mse <- dbFetch(crspa_mse, n = -1)
+
+
+crspq.msedelist <- dbSendQuery(wrds, \"select DLSTDT, PERMNO, dlret, dlstcd
+                   from crspq.msedelist\")
+#                   where dlret is not null\")
+crsp.msedelist <- dbFetch(crspq.msedelist, n = -1)
+
+
+# clean and marge data
+crsp.msf <- crsp.msf %>%
+ drop_na(prc)%>%
+  mutate(date = as.Date(date))
+
+crsp.mse <- crsp.mse %>%
+  drop_na(shrcd)%>%
+  mutate(date = as.Date(date)) 
+
+crsp.msedelist <- crsp.msedelist %>%
+  drop_na(dlret)%>%
+  mutate(date = as.Date(dlstdt)) 
+
+
+
+
+data.crsp.total <- crsp.msf %>%
+  merge(crsp.mse, by=c(\"date\", \"permno\"), all=TRUE, allow.cartesian=TRUE) %>%
+  merge(crsp.msedelist, by=c(\"date\", \"permno\"), all=TRUE, allow.cartesian=TRUE) %>%
+  arrange(date, permno) %>%
+  group_by(permno) %>%    
+  mutate_at(vars(shrcd, exchcd), funs(na.locf(., na.rm=FALSE)))%>% # fill in NA's with latest available (must sort by Date and group by PERMNO)
+  ungroup() 
+
+```"

@@ -1,0 +1,29 @@
+"0","```r
+
+
+#value sorts
+
+# calculate value breakpoints using NYSE stocks
+value_breakpoints <- stocks %>%
+  filter(month(date) == 6 & exchange == \"NYSE\") %>%
+  select(reference_date, bm) %>%
+  group_by(reference_date) %>%
+  summarize(value_q30 = quantile(bm, 0.3),
+            value_q70 = quantile(bm, 0.7))
+
+# also in june all stocks are sorted into 3 portfolios
+value_sorts <- stocks %>%
+  filter(month(date) == 6) %>%
+  left_join(value_breakpoints, by = \"reference_date\") %>%
+  mutate(value_portfolio = case_when(bm > value_q70 ~ \"H\",
+                                     bm <= value_q70 & bm > value_q30 ~ \"M\", 
+                                     bm <= value_q30 ~ \"L\",
+                                     TRUE ~ as.character(NA)))%>%
+  select(permno, reference_date, value_portfolio)
+
+# add value portfolio assignment back to stock data
+stocks <- left_join(stocks, value_sorts, by = c(\"permno\", \"reference_date\"))
+
+
+
+```"

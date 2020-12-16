@@ -1,0 +1,14 @@
+"0","```r
+compute_correlations <- function(data, ..., upper = TRUE) {
+  cor_matrix <- data %>%
+    select(...) %>%
+    cor(use = \"complete.obs\", method = \"pearson\") 
+  
+  return(cor_matrix)
+}
+tab.correlations <- compute_correlations(all.factors, mkt, mkt_ff, smb, smb_ff, hml, hml_ff) %>% 
+  kable(digits = 2) %>%
+  kable_styling(bootstrap_options = c(\"striped\", \"hover\", \"condensed\", \"responsive\"))
+tab.correlations
+
+```"

@@ -1,0 +1,50 @@
+"0","```r
+# make sure that only correct industry and data format is used, you would do this if you haven't already done this when you obtained the data
+#compustat <- compustat %>%
+#  filter(indfmt == \"INDL\" & datafmt == \"STD\") %>%
+ # select(-c(indfmt, datafmt))
+
+# check that only valid links are used
+compustat <- compustat %>%
+  filter(linktype %in% c(\"LU\", \"LC\"))
+
+# check that links are still active at time of information release
+compustat <- compustat %>%
+  filter(datadate <= linkenddt | is.na(linkenddt))
+
+# keep only distinct observations
+compustat <- compustat %>%
+  distinct()
+
+# calculate book value of preferred stock and equity
+compustat <- compustat %>%
+  mutate(be = coalesce(seq, ceq + pstk, at - lt) + 
+           coalesce(txditc, txdb + itcb, 0) - 
+           coalesce(pstkrv, pstkl, pstk, 0),
+         be = if_else(be < 0, as.numeric(NA), be)) %>%
+  select(gvkey, permno, datadate, be) 
+
+# determine year for matching and keep only one obs per year
+compustat <- compustat %>%
+  mutate(year = year(datadate)) %>%
+  group_by(permno, year) %>%
+  filter(datadate == max(datadate)) %>%
+  ungroup()
+
+# keep only observations once a firm has been included for two years
+compustat <- compustat %>%
+  group_by(gvkey) %>%
+  mutate(first_year = min(year)) %>%
+  ungroup() %>%
+  filter(year > first_year + 1) %>%
+  select(-gvkey)
+
+# kick out unnecessary rows with missing values
+compustat <- compustat %>%
+  na.omit()
+
+# determine reference date for matching (june of next calendar year)
+compustat <- compustat %>%
+  mutate(reference_date = ymd(paste0(year + 1, \"-06-01\"))) %>%
+  select(-year)
+```"

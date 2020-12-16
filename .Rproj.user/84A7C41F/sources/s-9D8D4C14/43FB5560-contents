@@ -1,0 +1,132 @@
+#-------------------------------------------------------------------------------
+#Author(s): Melody Huang
+#Last modified: 09/14/2018
+#Ch 6 Examples
+#Link to textbook: http://www.utstat.toronto.edu/mikevans/jeffrosenthal/chap6.pdf
+#-------------------------------------------------------------------------------
+rm(list=ls(all=TRUE))
+#-------------------------------------------------------------------------------
+#6.2.17 
+#A likelihood function is given by exp(−(θ − 1)^2/2) + 3 exp(−(θ − 2)^2/2)
+#for θ ∈ R. Numerically approximate the MLE by evaluating this function at 1000
+#equispaced points in (−10, 10]. Also plot the likelihood function.
+L<-function(theta){
+	return((exp(-(theta-1)^2)/2)+3*exp(-((theta-2)^2)/2))
+}
+#Generate 1000 equispaced points
+theta<-seq(-10, 10, length=1000)
+
+#MLE
+theta[which(L(theta)==max(L(theta)))]
+
+#Plot: 
+plot(theta, log(L(theta)), type='l', main="Log Likelihood Function")
+
+#-------------------------------------------------------------------------------
+#6.2.25 
+#Suppose the proportion of left-handed individuals in a population is θ. 
+#Based on a simple random sample of 20, you observe four left-handed individuals.
+#(a) Assuming the sample size is small relative to the population size, 
+#plot the log-likelihood function and determine the MLE.
+
+#Define likelihood function: 
+L<-function(m, n_population=50, k=20){
+	x<-4
+	n<-n_population-m
+	return(choose(m, 4)*choose(n, k-x)/choose(m+n, k))
+}
+population<-10000
+theta<-(1:population)/population
+plot(theta, log(L(theta*population, population)), xlab='Theta', type='l')
+#MLE
+theta[which(log(L(theta*population, population))==max(log(L(theta*population, population))))]
+
+#(b) If instead the population size is only 50, then plot the log-likelihood function and
+#determine the MLE. (Hint: Remember that the number of left-handed individuals follows
+#a hypergeometric distribution. This forces θ to be of the form i/50 for some
+#integer i between 4 and 34. From a tabulation of the log-likelihood, you can obtain the
+#MLE.)
+i<-4:50
+plot(i/50, log(L(i)), xlab='Theta')
+theta<-i/50
+theta[which(log(L(i))==max(log(L(i))))]
+
+#-------------------------------------------------------------------------------
+#6.3.19 
+#Suppose a measurement on a population can be assumed to follow the N(µ, σ2)
+#distribution, where µ, σ2 is unknown and the size of the population is very large. 
+#A very conservative upper bound on σ is given by 5. A researcher wants
+#to determine a 0.95-confidence interval for µ that is no longer than 1. 
+#Determine a sample size that will guarantee this. 
+
+#Using the formula from the textbook (p. 340) ...
+gamma<-0.95
+delta<-1
+sigma2<-5^2
+z<-qnorm((1+gamma)/2)
+print(sigma2*(z/delta)^2)
+
+#-------------------------------------------------------------------------------
+#6.3.22 
+#Generate 104 samples of size n = 5 from the N(0, 1) distribution. For each of
+#these samples, calculate the interval (x-s/√5, x+s/√5), where s is the sample standard
+#deviation, and compute the proportion of times this interval contains µ. Repeat
+#this simulation with n = 10 and 100 and compare your results.
+generate_interval<-function(n=5){
+	sample<-rnorm(n)
+	if(mean(sample)-(sd(sample)/sqrt(n)) <= 0 && mean(sample)+(sd(sample)/sqrt(n)) >= 0){
+		return(1)
+	}else{
+		return(0)
+	}
+}
+
+#n=5
+samples<-replicate(10^4, generate_interval())
+sum(samples)/10^4
+
+#n=10
+samples_n10<-replicate(10^4, generate_interval(n=10))
+sum(samples_n10)/10^4
+
+#n=100
+samples_n100<-replicate(10^4, generate_interval(n=100))
+sum(samples_n100)/10^4
+
+#-------------------------------------------------------------------------------
+#6.4.1
+#Determine a 0.95 confidence interval for the third moment
+X<-c(3.27, -1.24, 3.97, 2.25, 3.47, -0.09, 7.45, 6.20, 3.74, 4.12, 1.42, 
+	 2.75, -1.48, 4.97, 8.00, 3.26, 0.15, -3.64, 4.88, 4.55)
+m3<-mean(X^3)
+s3<-sd(X^3)
+#Confidence interval: 
+c(m3-(qnorm(1.95/2)*s3/sqrt(length(X))), m3+(qnorm(1.95/2)*s3/sqrt(length(X))))
+
+#-------------------------------------------------------------------------------
+#6.4.17
+#For the data of 6.4.1, use the plug-in MLE to estimate F(3) for an
+#N(µ, σ2) distribution. Use bootstrapping to estimate the MSE of this estimate for
+#m = 10^3 and m = 10^4.
+#Plug in estimator: 
+estimator<-pnorm((3-mean(X))/sd(X))
+#t(F):
+sample_proportion<-length(which(X<3))/length(X)
+#Calculate bias: 
+bias<-(estimator-sample_proportion)^2
+
+#Bootstrap: 
+bootstrap<-function(){
+	X_sample<-sample(X, size=length(X), replace=TRUE)
+	estimator<-pnorm((3-mean(X_sample))/sd(X_sample))
+	return(estimator)
+}
+#10^3 samples: 
+bootstrapped_estimators_10e3<-replicate(10^3 ,bootstrap())
+MSE_10e3<-bias + var(bootstrapped_estimators_10e3)
+print(MSE_10e3)
+
+#10^4 samples: 
+bootstrapped_estimators_10e4<-replicate(10^4 ,bootstrap())
+MSE_10e4<-bias + var(bootstrapped_estimators_10e4)
+print(MSE_10e4)

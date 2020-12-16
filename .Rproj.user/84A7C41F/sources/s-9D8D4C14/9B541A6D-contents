@@ -1,0 +1,128 @@
+---
+title: "Lecture 3/4"
+output: html_document
+---
+
+# For section 1.1 be sure to enter your response in the console
+```{r}
+library(magrittr)
+library(tidyverse)
+library(covid19.analytics) 
+library(dplyr)
+library(VIM)
+```
+
+#1.) Getting and Cleaning COVID data
+```{r}
+get_current_covid_data = function(){
+  covid_df_raw = covid19.data()
+  
+  covid_df = covid_df_raw %>%
+  select(Country_Region,Confirmed,Deaths, Recovered, Active) %>%
+  group_by(Country_Region) %>%
+  summarize(Active_agg = sum(Active),
+            Deaths_agg = sum(Deaths),
+            Recovered_agg = sum(Recovered),
+            Confirmed_agg = sum(Confirmed)) %>%
+  mutate(Death_rate = Deaths_agg / (Deaths_agg + Recovered_agg))
+
+  return(covid_df)
+}
+
+
+covid_df = get_current_covid_data()
+
+sum(is.na(covid_df))
+covid_df = drop_na(covid_df)
+```
+
+# 1.1.) Prompting Exmaple
+```{r}
+
+country_info <- function(){
+  covid_df = get_current_covid_data()
+  country = readline(prompt = "What Country would you like to know about?: ")
+  return(covid_df[covid_df["Country_Region"] == country,])
+}
+
+country_info()
+#### After You run Input a country name down in your console
+#### Or it will look like it is taking forever to run
+```
+
+#2.) World Health data
+```{r}
+World_data_raw = read_csv("World Health Data.csv")
+
+num_obs = nrow(World_data_raw)
+
+
+sum(is.na(World_data_raw))
+
+# colSums(World_data_raw == "..", na.rm = TRUE)
+# Large print out
+World_data = dplyr::na_if(World_data_raw, "..")
+
+threshold = .1
+
+World_data = World_data[ ,colSums(is.na(World_data)) < num_obs * threshold]
+
+World_data = World_data[, -c(1,2,4)]
+
+num_vars = ncol(World_data)
+World_data[,2:num_vars] = sapply(World_data[,2:num_vars], as.numeric)
+```
+
+# 2.1.) Dropping Column Function
+```{r}
+drop_columns_if_too_many_nas = function(df, threshold){
+  num_obs = nrow(df)
+  df = df[ ,colSums(is.na(df)) < num_obs * threshold]
+}
+```
+
+
+#3.) Imputation
+```{r}
+World_data_imp = World_data
+World_data_imp_med = World_data
+sum(is.na(World_data_imp))
+sum(is.na(World_data_imp_med))
+
+#3.1) Mean imputation
+World_data_imp[[2]][is.na(World_data_imp[[2]])] <- mean(World_data_imp[[2]], na.rm = TRUE)
+
+# In a loop
+for(i in 2:num_vars) {
+  World_data[[i]][is.na(World_data[[i]])] <- mean(World_data[[ i]], na.rm =TRUE)
+}
+
+for(i in 2:num_vars) {
+  World_data_imp[ , i][is.na(World_data_imp[ , i])] <- median(World_data_imp[ , i], na.rm = TRUE)
+}
+
+sum(is.na(World_data_imp_med))
+
+#3.2) Median imputation
+for(i in 2:num_vars) {
+  World_data_imp_med[[i]][is.na(World_data_imp_med[[i]])] <- mean(World_data[[ i]], na.rm =TRUE)
+}
+
+
+#3.3.) Nearest neighbor Imputation
+World_data_knn = VIM::kNN(World_data, variable = colnames(World_data[,2:num_vars] ) , k = 5)
+World_data_knn = World_data_knn[1:num_vars]
+
+sum(is.na(World_data_knn))
+```
+
+#4.) Merging Datasets
+```{r}
+colnames(World_data_knn)[1] = colnames(covid_df)[1]
+
+df = merge(covid_df, World_data_knn, by = "Country_Region")
+df
+```
+
+
+

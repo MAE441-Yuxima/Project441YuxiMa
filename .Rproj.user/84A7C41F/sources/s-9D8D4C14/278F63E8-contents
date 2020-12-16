@@ -1,0 +1,245 @@
+---
+title: "442 Forecast Evaluation"
+author: "Yuxi Ma"
+date: "11/14/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls(all=TRUE))
+library(quantmod)
+library(aTSA)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(car)
+library(pastecs)
+```
+
+## 1. Bitcion & S&P500
+```{r}
+#Cryptocurrencies
+quantmod::getSymbols("BTC-USD", from="2013-04-28", to="2020-11-13")
+#S&P500
+quantmod::getSymbols("^GSPC", from="2013-04-28", to="2020-11-13")
+
+BTCUSD = as.data.frame(`BTC-USD`)
+BTCUSD$Date = rownames(BTCUSD)
+
+GSPC = as.data.frame(GSPC)
+GSPC$Date = rownames(GSPC)
+
+pair1 = merge(BTCUSD, GSPC, by = "Date")
+pair1 = na.omit(pair1)
+
+pair1_used = pair1[, c("Date", "BTC-USD.Adjusted", "GSPC.Adjusted")]
+
+#I(1) Series
+adf.test(diff(pair1_used$`BTC-USD.Adjusted`))
+adf.test(diff(pair1_used$GSPC.Adjusted))
+#Proved to be both I(1)
+
+plot(pair1_used$`BTC-USD.Adjusted`, type="l", xlab="September 17th 2014 to November 13th 2020", ylab="Bitcoin in USD", col="blue")
+par(new=T)
+lines(pair1_used$GSPC.Adjusted, type="l", xlab="", ylab="", col="red")
+par(new=F)
+legend(1, 15000,legend=c("BTC-USD.Adjusted", "GSPC.Adjusted"),
+       col=c("blue", "red"), lty=c(1,1), cex=0.8)
+
+comb1 = lm(pair1_used$`BTC-USD.Adjusted`~pair1_used$GSPC.Adjusted)
+comb1
+hedge_ratio = comb1$coefficients[2]
+mean = comb1$coefficients[1]
+
+#Errors
+plot(pair1_used$`BTC-USD.Adjusted`- hedge_ratio * pair1_used$GSPC.Adjusted - mean, type="l", ylab = "Error term")
+
+#ADF test for residuals
+adf.test(comb1$residuals) #p-value = 0.02, stationary
+
+#Rolling window
+BTCUSD.Adjusted = unclass(pair1_used$`BTC-USD.Adjusted`)
+GSPC.Adjusted = unclass(pair1_used$GSPC.Adjusted)
+obs = length(BTCUSD.Adjusted)
+reg = lm(BTCUSD.Adjusted ~ GSPC.Adjusted)
+hedge_ratio = reg$coefficient[2] #8.607
+
+Z_score = 1.96
+spread1 = data.frame(BTCUSD.Adjusted - hedge_ratio * GSPC.Adjusted)
+colnames(spread1) = "Spread"
+avg = mean(spread1$Spread)
+sd = sd(spread1$Spread)
+spread1$mean = rep(avg, obs)
+spread1$lower_bound = rep(avg -( Z_score * sd ), length(spread1$Spread))
+spread1$higher_bound = rep(avg + ( Z_score * sd ), length(spread1$Spread))
+
+plot(spread1$Spread,
+main="GSPC.Adjusted / BTCUSD.Adjusted Mean Reversion Strategy",
+ylab="Spread",
+xlab="September 17th 2014 to November 13th 2020",
+type="l",
+col="black")
+lines(spread1$mean, lty = "dashed", col = "red" )
+lines(spread1$lower_bound, lty = "dotted", col = "green")
+lines(spread1$higher_bound, lty = "dotted", col = "green")
+legend("topleft",
+c("Spread","Mean","Mean+-2SD"),
+fill=c("black","red", "green")
+)
+```
+Since the current hedge ratio of Bitcoin~S&P500 is 8.607, I would recommend long 1000 value of bitcoin and simultaneous short 8.607 times that value of S&P500
+
+According to the code and explaination above, the profit of this portfolio is exactly the data series "Spread" created in the chunk above. In the following part I will directly leverage this variable, turn it into a time series and forecast its future 
+
+## 2.Corn Futures & Crude Oil Futures
+```{r}
+#Price of Crude Oil Futures
+quantmod::getSymbols("CL=F", from="2006-04-26", to="2020-11-13")
+
+#Corn Futures
+quantmod::getSymbols("ZC=F", from="2006-04-26", to="2020-11-13")
+
+ZCF = as.data.frame(`ZC=F`)
+ZCF$Date = rownames(ZCF)
+
+CLF = as.data.frame(`CL=F`)
+CLF$Date = rownames(CLF)
+
+pair2 = merge(ZCF, CLF, by = "Date")
+pair2 = na.omit(pair2)
+
+pair2_used = pair2[, c("Date", "ZC=F.Adjusted", "CL=F.Adjusted")]
+
+#I(1) Series
+adf.test(diff(pair2_used$`ZC=F.Adjusted`))
+adf.test(diff(pair2_used$`CL=F.Adjusted`))
+#Proved to be both I(1)
+
+stat.desc(pair2_used)
+
+pair2_used$ZCF.Adjusted10 = pair2_used$`ZC=F.Adjusted`/10
+
+plot(pair2_used$ZCF.Adjusted10, type="l", ylim = c(-40,150), xlab="April 26th 2006 to November 12th 2020", ylab="Corn Futures in USD", col="blue")
+par(new=T)
+lines(pair2_used$`CL=F.Adjusted`, type="l", xlab="", ylab="", col="red")
+par(new=F)
+legend(1, 0,legend=c("ZCF.Adjusted10", "CL=F.Adjusted"),
+       col=c("blue", "red"), lty=c(1,1), cex=0.8)
+
+comb2 = lm(pair2_used$ZCF.Adjusted10~pair2_used$`CL=F.Adjusted`)
+comb2
+hedge_ratio = comb2$coefficients[2]
+mean = comb2$coefficients[1]
+
+#Errors
+plot(pair2_used$ZCF.Adjusted10 - hedge_ratio * pair2_used$`CL=F.Adjusted` - mean, type="l", ylab = "Error term")
+
+#ADF test for residuals
+adf.test(comb2$residuals) #p-value = 0.08, stationary
+
+#Rolling window
+ZCF.Adjusted10 = unclass(pair2_used$ZCF.Adjusted10)
+CLF.Adjusted = unclass(pair2_used$`CL=F.Adjusted`)
+obs = length(ZCF.Adjusted10)
+reg = lm(ZCF.Adjusted10 ~ CLF.Adjusted)
+hedge_ratio = reg$coefficient[2] #0.3784
+
+Z_score = 1.96
+spread = data.frame(ZCF.Adjusted10 - hedge_ratio * CLF.Adjusted)
+colnames(spread) = "Spread"
+avg = mean(spread$Spread)
+sd = sd(spread$Spread)
+spread$mean = rep(avg, obs)
+spread$lower_bound = rep(avg -( Z_score * sd ), length(spread$Spread))
+spread$higher_bound = rep(avg + ( Z_score * sd ), length(spread$Spread))
+
+plot(spread$Spread,
+main="ZCF.Adjusted10 / CLF.Adjusted Mean Reversion Strategy",
+ylab="Spread",
+xlab="April 26th 2006 to November 12th 2020",
+type="l",
+col="black")
+lines(spread$mean, lty = "dashed", col = "red" )
+lines(spread$lower_bound, lty = "dotted", col = "green")
+lines(spread$higher_bound, lty = "dotted", col = "green")
+legend("topleft",
+c("Spread","Mean","Mean+-2SD"),
+fill=c("black","red", "green")
+)
+```
+The current hedge ratio of corn futures~crude oil futures is 0.3784. Therefore I recommand long $1000 corn futures at the same time short $378.4 crude oil futures.
+
+## 3. JPMorgan & S&P500 
+```{r}
+#
+quantmod::getSymbols("JPM", from="2000-01-01", to="2020-11-14")
+JPM = as.data.frame(JPM)
+JPM$Date = rownames(JPM)
+#
+quantmod::getSymbols("^GSPC", from="2000-01-01", to="2020-11-14")
+GSPC = as.data.frame(GSPC)
+GSPC$Date = rownames(GSPC)
+
+pair3 = merge(JPM, GSPC, by = "Date")
+pair3 = na.omit(pair3)
+pair3_used = pair3[, c("Date", "JPM.Adjusted", "GSPC.Adjusted")]
+
+#I(1) Series
+adf.test(diff(pair3_used$JPM.Adjusted))
+adf.test(diff(pair3_used$GSPC.Adjusted))
+#Proved to be both I(1)
+
+options(scipen = 200, digits = 4)
+stat.desc(pair3_used)
+pair3_used$GSPC.Adjusted50 = pair3_used$GSPC.Adjusted/50
+
+plot(pair3_used$JPM.Adjusted, type="l", xlab="January 3rd 2000 to November 13th 2020", ylab="JPMorgan stock value in USD", col="blue")
+par(new=T)
+lines(pair3_used$GSPC.Adjusted50, type="l", xlab="", ylab="", col="red")
+par(new=F)
+legend(1, 120,legend=c("JPM.Adjusted", "GSPC.Adjusted50"),
+       col=c("blue", "red"), lty=c(1,1), cex=0.8)
+
+comb3 = lm(pair3_used$JPM.Adjusted~pair3_used$GSPC.Adjusted50)
+comb3
+hedge_ratio = comb3$coefficients[2]
+mean = comb3$coefficients[1]
+
+#Errors
+plot(pair3_used$JPM.Adjusted - hedge_ratio * pair3_used$GSPC.Adjusted50 - mean, type="l", ylab = "Error term")
+
+#ADF test for residuals
+adf.test(comb3$residuals) #stationary when with/without no drift and no trend
+
+#Rolling window
+JPM.Adjusted = unclass(pair3_used$JPM.Adjusted)
+GSPC.Adjusted50 = unclass(pair3_used$GSPC.Adjusted50)
+obs = length(JPM.Adjusted)
+reg = lm(JPM.Adjusted ~ GSPC.Adjusted50)
+hedge_ratio = reg$coefficient[2] #2.115
+
+Z_score = 1.96
+spread = data.frame(JPM.Adjusted - hedge_ratio * GSPC.Adjusted50)
+colnames(spread) = "Spread"
+avg = mean(spread$Spread)
+sd = sd(spread$Spread)
+spread$mean = rep(avg, obs)
+spread$lower_bound = rep(avg -( Z_score * sd ), length(spread$Spread))
+spread$higher_bound = rep(avg + ( Z_score * sd ), length(spread$Spread))
+
+plot(spread$Spread,
+main="JPM.Adjusted / GSPC.Adjusted50 Mean Reversion Strategy",
+ylab="Spread",
+xlab="January 3rd 2000 to November 13th 2020",
+type="l",
+col="black")
+lines(spread$mean, lty = "dashed", col = "red" )
+lines(spread$lower_bound, lty = "dotted", col = "green")
+lines(spread$higher_bound, lty = "dotted", col = "green")
+legend("topleft",
+c("Spread","Mean","Mean+-2SD"),
+fill=c("black","red", "green")
+)
+```
+The current hedge ratio of JPMorgan stock is 2.115. Therefore I recommand long 1000 shares of S&P500 at the same time short 2115 shares of JPMorgan's stock.

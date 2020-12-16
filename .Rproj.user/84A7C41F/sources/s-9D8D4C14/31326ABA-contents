@@ -1,0 +1,128 @@
+library(AER)
+library(sandwich)
+library(foreign)
+library(lmtest)
+library(pcse)
+library(plm)
+library(multiwayvcov)
+#-------------------------------------------------------------------------------
+#Chapter 11
+#Example 11.1 Wage Equation
+
+wages<-read.csv('TableF8-1.csv', header=TRUE, stringsAsFactors=FALSE)
+#attach(wages)
+
+wages$EXPER2<-wages$EXPER^2
+
+wages<-plm.data(wages, 595)
+
+model<-lm(LWAGE~EXPER+I(EXPER^2)+WKS+OCC+IND+SOUTH+SMSA+MS+UNION+ED+FEM+BLK, data=wages)
+coeftest(model) #OLS SE
+coeftest(model, vcov=vcovHC(model, 'HC0')) #White Heteroskedastic Consistent SE
+coeftest(model, vcov=cluster.vcov(model, wages$id))
+
+#Group Means Estimate
+model_gm<-pmg(LWAGE~EXPER+EXPER2+WKS+OCC+IND+SOUTH+SMSA+MS+UNION+ED+FEM+BLK, data=wages, index=c("time", "id"))
+summary(model_gm)
+
+#Fixed Effects Wage Equation: 
+#We drop ED, FEM, BLK (time invariant)
+#Pooled
+model_pooled<-plm(LWAGE~EXPER+EXPER2+WKS+OCC+IND+SOUTH+SMSA+MS+UNION, data=wages, model='pooling')
+coeftest(model_pooled, vcov=vcovHC)
+
+#Time Effects
+model_time<-plm(LWAGE~EXPER+EXPER2+WKS+OCC+IND+SOUTH+SMSA+MS+UNION, data=wages, model='within', effect='time')
+summary(model_time)
+
+#Individual Effects
+model_indiv<-plm(LWAGE~EXPER+EXPER2+WKS+OCC+IND+SOUTH+SMSA+MS+UNION, data=wages, model='within', effect='individual', index=c("id", "time"))
+summary(model_indiv)
+fixef(model_indiv)
+pFtest(model_indiv, model_pooled)
+
+#Both: 
+model_both<-plm(LWAGE~EXPER+EXPER2+WKS+OCC+IND+SOUTH+SMSA+MS+UNION, data=wages, model='within', effect='twoways', index=c("id", "time"))
+summary(model_both)
+fixef(model_both, "individual")
+fixef(model_both, "time")
+
+#Random Effects
+plm(LWAGE~EXPER+EXPER2+WKS+OCC+IND+SOUTH+SMSA+MS+UNION, data=wages, model='random', effect='individual')
+
+#---------------------------------------------------------------
+#Another example: 
+
+#Chapter 13 (Greene, ed.5 2003)
+#Code stolen from AER
+data("USAirlines", package = "AER")
+
+#Example 13.1, Table 13.1
+fm_no <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "pooling")
+fm_gm <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "between")
+fm_firm <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "within")
+fm_time <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "within",
+effect = "time")
+fm_ft <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "within",
+effect = "twoways")
+summary(fm_no)
+summary(fm_gm)
+summary(fm_firm)
+fixef(fm_firm)
+summary(fm_time)
+fixef(fm_time)
+summary(fm_ft)
+fixef(fm_ft, effect = "individual")
+fixef(fm_ft, effect = "time")
+
+
+
+#IV Regression
+usc<-as.data.frame(USConsump1993)
+usc$investment<-usc$income - usc$expenditure
+
+fm_ols <- lm(expenditure ~ income, data = usc)
+fm_iv <- ivreg(expenditure ~ income | investment, data = usc)
+
+#Hausman test
+cf_diff<-coef(fm_iv) - coef(fm_ols)
+vc_diff<-vcov(fm_iv) - vcov(fm_ols)
+x2_diff<-as.vector(t(cf_diff) %*% solve(vc_diff) %*% cf_diff)
+pchisq(x2_diff, df = 2, lower.tail = FALSE)
+
+#-------------------------------------------------------------------------------
+
+#Chapter 15
+data('Grunfeld', package = "AER")
+ggr <- subset(Grunfeld, firm %in% c("General Motors", "US Steel",
+"General Electric", "Chrysler", "Westinghouse"))
+ggr[c(26, 38), 1] <- c(261.6, 645.2)
+ggr[32, 3] <- 232.6
+
+library("plm")
+pggr <- plm.data(ggr, c("firm", "year"))
+library("systemfit")
+fm_ols <- systemfit(invest ~ value + capital, data = pggr, method = "OLS")
+fm_pols <- systemfit(invest ~ value + capital, data = pggr, method = "OLS",
+pooled = TRUE)
+
+
+pg <- plm.data(subset(Grunfeld, firm != "American Steel"), c("firm", "year"))
+fm_fe <- plm(invest ~ value + capital, model = "within", data = pg)
+summary(fm_fe)
+coeftest(fm_fe, vcov = vcovHC)
+fm_reswar <- plm(invest ~ value + capital, data = pg,
+model = "random", random.method = "swar")
+summary(fm_reswar)
+
+## testing for random effects
+fm_ols <- plm(invest ~ value + capital, data = pg, model = "pooling")
+plmtest(fm_ols, type = "bp")
+plmtest(fm_ols, type = "honda")
+## Random effects models
+fm_ream <- plm(invest ~ value + capital, data = pg, model = "random",
+random.method = "amemiya")
+fm_rewh <- plm(invest ~ value + capital, data = pg, model = "random",
+random.method = "walhus")
+fm_rener <- plm(invest ~ value + capital, data = pg, model = "random",
+random.method = "nerlove")

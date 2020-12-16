@@ -1,0 +1,39 @@
+"0","```r
+
+#let's compare them to the actual fama french factors as created by fama french
+# you can either get this from WRDS or from the fama french website. Please note that the fama french website is updated regularly and the WRDS fama french data once every few months. Just so you know how to get data from other sources via coding, I will use the fama french website. 
+
+ff_url <- \"https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_CSV.zip\"
+
+temp_file <- tempfile()
+
+download.file(ff_url, temp_file)
+
+ff_factors_raw_data <- unzip(temp_file)
+
+ff_factors_raw_data<- read_csv(ff_factors_raw_data, skip = 3)
+
+
+ff_factors_raw_data <- ff_factors_raw_data %>%
+  transmute(date = ymd(paste0(X1, \"01\")),
+            rf_ff = as.numeric(RF),
+            mkt_ff = as.numeric(`Mkt-RF`) + as.numeric(RF),
+            smb_ff = as.numeric(SMB),
+            hml_ff = as.numeric(HML)) %>%
+  filter(date <= max(crsp$date)) %>%
+  mutate(date = floor_date(date, \"month\")) %>%
+  select(-rf_ff)
+
+#head(ff_factors_raw_data) #check to make sure everything is in order
+
+#tail(ff_factors_raw_data)  #check to make sure everything is in order
+
+
+
+all.factors <- factors %>%
+  mutate(date = floor_date(date, \"month\")) %>%
+  left_join(ff_factors_raw_data, by = \"date\")
+
+
+
+```"

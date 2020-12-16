@@ -1,0 +1,52 @@
+"0","```r
+
+#Now let's focus on the data from Compustat
+
+# retrieve Compustat annual data (takes 10mins each below)
+comp1 <- dbSendQuery(wrds,\"select GVKEY, CUSIP, DATADATE, FYR, FYEAR, SICH, NAICSH,
+                            AT, LT, SEQ, CEQ, PSTKL, PSTKRV, PSTK, TXDITC, TXDB, ITCB,
+                            REVT, COGS, XINT, XSGA, IB, TXDI, DVC, ACT, CHE, LCT,
+                            DLC, TXP, DP, PPEGT, INVT 
+                    from COMP.FUNDA
+                    where INDFMT='INDL' and DATAFMT='STD' and CONSOL='C' and POPSRC='D'\") # STD is unrestatd data
+data.comp.funda <- dbFetch(comp1, n = -1) # n=-1 denotes no max but retrieve all record
+
+
+
+# retrieve Compustat quarterly data, to get quarterly add \"Q' to the end of the variables
+comp2 <- dbSendQuery(wrds,\"select GVKEY, CUSIP, DATADATE, FYR, FYEARQ,
+                            ATQ, LTQ, SEQQ, CEQQ, PSTKRQ, PSTKQ, TXDITCQ, TXDBQ,
+                            REVTQ, COGSQ, XINTQ, XSGAQ, IBQ, TXDIQ, ACTQ, CHEQ, LCTQ,
+                            DLCQ, TXPQ, DPQ, PPEGTQ, INVTQ, EPSPXQ, RDQ
+                           from COMPM.FUNDQ
+                           where INDFMT='INDL' and DATAFMT='STD' and CONSOL='C' and POPSRC='D'\") # STD is unrestatd data
+data.comp.fundq <- dbFetch(comp2, n = -1) # n=-1 denotes no max but retrieve all record
+
+
+# retrieve Merged Compustat/CRSP link table
+comp3<- dbSendQuery(wrds,\"select GVKEY, LPERMNO, LINKDT, LINKENDDT, LINKTYPE, LINKPRIM
+                    from crsp.ccmxpf_lnkhist\")
+data.ccmlink <- dbFetch(comp3, n = -1) 
+
+
+# Merge the linked Permno onto Compustat dataset
+
+data.ccm <-  data.ccmlink %>%
+  # use only primary links (from WRDS Merged Compustat/CRSP examples)
+  filter(linktype %in% c(\"LU\", \"LC\", \"LS\")) %>%
+  filter(linkprim %in% c(\"P\", \"C\", \"J\")) %>%
+  merge(data.comp.funda, by=\"gvkey\") %>% # inner join, keep only if permno exists
+  mutate(datadate = as.Date(datadate), 
+         permno = as.factor(lpermno),
+         linkdt = as.Date(linkdt),
+         linkenddt = as.Date(linkenddt),
+         linktype = factor(linktype, levels=c(\"LC\", \"LU\", \"LS\")),
+         linkprim = factor(linkprim, levels=c(\"P\", \"C\", \"J\"))) %>%
+  # remove compustat fiscal ends that do not fall within linked period; linkenddt=NA (from .E) means ongoing  
+  filter(datadate >= linkdt & (datadate <= linkenddt | is.na(linkenddt))) %>%
+  # prioritize linktype, linkprim based on order of preference/primary if duplicate
+  arrange(datadate, permno, linktype, linkprim) %>%
+  distinct(datadate, permno, .keep_all = TRUE)
+
+
+```"

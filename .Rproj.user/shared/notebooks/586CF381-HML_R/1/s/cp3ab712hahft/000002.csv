@@ -1,0 +1,19 @@
+"0","```r
+#construct factor portfolios
+
+portfolios <- stocks %>%
+  group_by(date, size_portfolio, value_portfolio) %>%
+  summarize(ret_vw = weighted.mean(ret, mktcap_weight)) %>%
+  ungroup() %>%
+  mutate(portfolio = paste0(size_portfolio, \"/\", value_portfolio))
+
+factors <- portfolios %>%
+  group_by(date) %>%
+  summarize(smb = mean(ret_vw[portfolio %in% c(\"S/H\", \"S/M\", \"S/L\")]) - 
+              mean(ret_vw[portfolio %in% c(\"B/H\", \"B/M\", \"B/L\")]),
+            hml = mean(ret_vw[portfolio %in% c(\"S/H\", \"B/H\")]) - 
+              mean(ret_vw[portfolio %in% c(\"S/L\", \"B/L\")]))
+
+
+
+```"

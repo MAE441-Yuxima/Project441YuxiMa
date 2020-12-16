@@ -1,0 +1,10 @@
+geom_return<-function(your_return){
+  if(is.data.frame(your_return)){
+    returns<-c()
+    for(i in 1:ncol(your_return)){
+      returns<-append(returns, prod(1+your_return[,i])-1)
+    }
+    return(returns)
+  }
+  return(prod(1+your_return)-1)
+}

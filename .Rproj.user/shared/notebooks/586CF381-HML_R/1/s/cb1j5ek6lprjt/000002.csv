@@ -1,0 +1,41 @@
+"0","```r
+
+# analysis of fama french (1993) starts in 1963 so I only need data after 1962
+crsp <- crsp %>%
+  filter(date >= \"1963-01-01\")
+
+# keep only US-based common stocks (10 and 11)
+crsp <- crsp %>%
+  filter(shrcd %in% c(10, 11)) %>%
+  select(-shrcd)
+
+# keep only distinct observations to avoid multiple counting
+crsp <- crsp %>%
+  distinct()
+
+# compute market cap
+# note: altprc is the negative of average of bid and ask from last traded price
+#       for which the data is available if there is no last traded price
+crsp <- crsp %>%
+  mutate(mktcap = abs(shrout * altprc) / 1000, # in millions of dollars
+         mktcap = if_else(mktcap == 0, as.numeric(NA), mktcap)) 
+
+
+# define exchange labels and keep only NYSE, AMEX and NASDAQ stocks
+crsp <- crsp %>%
+  mutate(exchange = case_when(exchcd %in% c(1, 31) ~ \"NYSE\",
+                              exchcd %in% c(2, 32) ~ \"AMEX\",
+                              exchcd %in% c(3, 33) ~ \"NASDAQ\",
+                              TRUE ~ \"Other\")) %>%
+  filter(exchange != \"Other\")
+
+# adjust delisting returns 
+crsp <- crsp %>%
+  mutate(ret_adj = case_when(!is.na(dlret) ~ dlret,
+                             is.na(dlret) & !is.na(dlstcd) ~ -100,
+                             is.na(dlret) & (dlstcd %in% c(500, 520, 580, 584) | 
+                                               (dlstcd >= 551 & dlstcd <= 574)) ~ -30,
+                             TRUE ~ ret)) %>%
+  select(-c(dlret, dlstcd))
+
+```"

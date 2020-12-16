@@ -1,0 +1,78 @@
+#-------------------------------------------------------------------------------
+#Author(s): Melody Huang
+#Last modified: 09/14/2018
+#Ch 5 Examples
+#Link to textbook: http://www.utstat.toronto.edu/mikevans/jeffrosenthal/chap5.pdf
+#-------------------------------------------------------------------------------
+rm(list=ls(all=TRUE))
+#-------------------------------------------------------------------------------
+#5.1.11 
+#Suppose we want to obtain the distribution of the quantity Y = X^4 + 2X^3 − 3
+#when X ∼ N(0, 1). Here we are faced with a form of mathematical uncertainty because
+#it is very difficult to determine the distribution of Y using mathematical methods. 
+#Propose a computer method for approximating the distribution function of Y and estimate
+#P(Y ∈ (1, 2)). What is the relevance of statistical methodology to your approach?
+
+Y<-function(X){
+	return(X^4+2*X^3-3)
+}
+x_sample<-rnorm(10^5)
+#Sanity check: 
+hist(x_sample)
+
+#Generate Y values: 
+y_sample<-Y(x_sample)
+hist(y_sample)
+#Probability that Y is in the interval (1,2)
+sum(ifelse(y_sample > 1 & y_sample < 2, 1, 0))/10^5
+
+#-------------------------------------------------------------------------------
+#5.4.11 
+#Generate a sample of 1000 from an N(3, 2) distribution
+sample<-rnorm(1000, 3, 2)
+#(a) Calculate F_X for this sample.
+F<-ecdf(sample)
+plot(F)
+
+#(b) Plot a density histogram based on these data using the intervals of length 1 
+#over the range (−5, 10).
+library(MASS)
+truehist(sample, h=1, xlim=c(-5, 10), col='skyblue3')
+
+#(c) Plot a density histogram based on these data using the intervals of length 0.1 
+#over the range (−5, 10).
+truehist(sample, h=0.1, xlim=c(-5, 10), col='skyblue3')
+
+#(d) Comment on the difference in the look of the histograms in parts (b) and (c). To
+#what do you attribute this?
+
+#(e) What limits the size of the intervals we use to group observations when we are
+#plotting histograms?
+#-------------------------------------------------------------------------------
+#5.4.12 
+#Suppose we have a population of 10,000 elements, each with a unique label
+#from the set {1, 2, 3,..., 10000}.
+#(a) Generate a sample of 500 labels from this population using simple random sampling.
+srs_sample<-sample(1:10000, 500)
+
+#(b) Generate a sample of 500 labels from this population using i.i.d. sampling.
+iid_sample<-sample(1:10000, 500, replace=TRUE)
+
+#-------------------------------------------------------------------------------
+#5.5.18 
+#Generate a sample of 30 from an N(10, 2) distribution and a sample of 1 from
+#an N(30, 2) distribution. Combine these together to make a single sample of 31.
+#(a) Produce a boxplot of these data.
+sample<-append(rnorm(30, 10, 2), rnorm(1, 30, 2))
+boxplot(sample)
+
+#(b) What do you notice about this plot?
+
+#(c) Based on the boxplot, what characteristic do you think would be appropriate to
+#measure the location and spread of the distribution? Explain why.
+
+#outliers, mean/median comparison, etc.?
+
+
+
+

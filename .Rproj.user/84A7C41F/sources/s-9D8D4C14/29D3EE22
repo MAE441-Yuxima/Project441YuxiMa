@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1608107969769.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "29D3EE22",
+    "lastKnownWriteTime" : 1608108789,
+    "last_content_update" : 1608108789976,
+    "path" : "~/Project441YuxiMa/R/rolling_window_plot.R",
+    "project_path" : "R/rolling_window_plot.R",
+    "properties" : {
+        "cursorPosition" : "4,99",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 7,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

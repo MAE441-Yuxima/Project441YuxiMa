@@ -1,0 +1,195 @@
+#-------------------------------------------------------------------------------
+#Author(s): Melody Huang
+#Last modified: 09/13/2018
+#Ch 4 Examples
+#Link to textbook: http://www.utstat.toronto.edu/mikevans/jeffrosenthal/chap4.pdf
+#-------------------------------------------------------------------------------
+rm(list=ls(all=TRUE))
+#-------------------------------------------------------------------------------
+#4.1.10 
+#Generate a sample of N = 10^3 values of Y50 in Example 4.1.1. Calculate the
+#mean and standard deviation of this sample.
+#Y_n = (X1*X2*...Xn)^(1/n)
+#Begin by creating a function in accordance to the custom pmf defined in Example 4.1.1
+rX<-function(){
+	x<-runif(1) #Will uniformly pick some value of x between 0 and 1
+	if(x<=0.5){
+		return(1)
+	}
+	if(x > 0.75){
+		return(2)
+	} 
+	else{
+		return(3)
+	}
+}
+#Test to make sure rX works correctly: 
+table(replicate(5000, rX()))/5000
+
+#Helper function: 
+geom_mean<-function(X){
+	return(prod(X)^(1/length(X)))
+}
+
+#Generates Yn, with default value set to n=50
+Y<-function(n=50){
+	#Generate sample of X's (50 in total)
+	X<-replicate(n, rX())
+	return(geom_mean(X))
+}
+
+#We now generate 10^3 samples of Y50: 
+Y_sample<-replicate(10^4, Y())
+
+#Mean:
+mean(log(Y_sample))
+
+#Standard Deviation:
+sd(log(Y_sample))
+
+#Histogram: 
+hist(log(Y_sample))
+
+
+quartz()
+truehist(log(Y_sample),col='lightgrey',xlim=c(0.2,0.8),xlab="lnY", ylab="Density",cex=1.5)
+lines(density(log(Y_sample)),lwd=4,col='red')
+u =rnorm(1000,mean=0.4482977, sd=0.06692419)
+lines(density(u),lwd=4,col='blue',lty=2)
+legend("topright",c("Density (Data)","N(mu, sigma)"),fill=c("red","blue"),bty='n')
+#dev.print(device=postscript,"f1.eps",width=7,height=7, horizontal=FALSE)
+#dev.off()
+
+#-------------------------------------------------------------------------------
+#4.1.11 
+#Suppose that X1, X2,..., X10 is an i.i.d. sequence from an N(0, 1) distribution.
+#Generate a sample of N = 10^3 values from the distribution of max(X1, X2,...,
+#X10). Calculate the mean and standard deviation of this sample.
+
+#Define Z = max(X1, X2, ... X10)
+Z<-function(){
+	return(max(rnorm(10)))	
+}
+#Generate sample: 
+Z_sample<-replicate(10^3, Z())
+
+#Mean:
+mean(Z_sample)
+
+#Standard Deviation:
+sd(Z_sample)
+
+#Histogram: 
+hist(Z_sample)
+
+#-------------------------------------------------------------------------------
+#4.2.12 
+#Generate i.i.d. X1, ..., Xn distributed Exponential(5) and compute Mn when
+#n = 20. Repeat this N times, where N is large (if possible, take N = 10^5, otherwise
+#as large as is feasible), and compute the proportion of values of Mn that lie between
+#0.19 and 0.21. Repeat this with n = 50. What property of convergence in probability
+#do your results illustrate? (Note: Mn = sample mean)
+generate_Mn<-function(n=20){
+	X<-rexp(n, rate=5) #Generate values of X from Exponential(5) distribution
+	return(mean(X))
+}
+#When n=20
+n20<-replicate(10^5, generate_Mn())
+#Proportion of values between 0.19 and 0.21
+sum(ifelse(n20 > 0.19 & n20 < 0.21, 1, 0))/10^5 
+
+#When n=50: 
+n50<-replicate(10^5, generate_Mn(n=50))
+#Proportion of values between 0.19 and 0.21
+sum(ifelse(n50 > 0.19 & n50 < 0.21, 1, 0))/10^5
+
+#The exercise doesn't ask for this, but let's see what happens if we increase n by a lot
+#When n=1000: 
+n1000<-replicate(10^5, generate_Mn(n=1000))
+#Proportion of values between 0.19 and 0.21
+sum(ifelse(n1000 > 0.19 & n1000 < 0.21, 1, 0))/10^5
+
+#-------------------------------------------------------------------------------
+#4.2.13 
+#Generate i.i.d. X1,..., Xn distributed Poisson(7) and compute Mn when n =
+#20. Repeat this N times, where N is large (if possible, take N = 10^5, otherwise as
+#large as is feasible), and compute the proportion of values of Mn that lie between 6.99
+#and 7.01. Repeat this with n = 100. What property of convergence in probability do
+#your results illustrate?
+generate_Mn<-function(n=20){
+	X<-rpois(n, lambda=7) #Generate values of X from Poisson(5) distribution
+	return(mean(X))
+}
+#When n=20
+n20<-replicate(10^5, generate_Mn())
+#Proportion of values between 6.99 and 7.01
+sum(ifelse(n20 >= 6.99 & n20 <= 7.01, 1, 0))/10^5 
+
+#When n=100: 
+n100<-replicate(10^5, generate_Mn(n=100))
+#Proportion of values between 6.99 and 7.01
+sum(ifelse(n100 >= 6.99 & n100 <= 7.01, 1, 0))/10^5 
+
+#The exercise doesn't ask for this, but let's see what happens if we increase n by a lot
+#When n=1000: 
+n1000<-replicate(10^5, generate_Mn(n=1000))
+#Proportion of values between 6.99 and 7.01
+sum(ifelse(n1000 >= 6.99 & n1000 <= 7.01, 1, 0))/10^5 
+
+
+#-------------------------------------------------------------------------------
+#4.3.13 
+#Generate i.i.d. X1,..., Xn distributed Exponential(5) with n large (take n =
+#10^5 if possible). Plot the values M1, M2,..., Mn. To what value are they converging?
+#How quickly?
+generate_Mn<-function(n=20){
+	X<-rexp(n, rate=5) #Generate values of X from Exponential(5) distribution
+	return(mean(X))
+}
+
+M<-unlist(lapply(1:(10^5), generate_Mn))
+plot(M, type='l', xlab="n", main="Mn (Sample Mean from Exponential(5))")
+#-------------------------------------------------------------------------------
+#4.4.15
+#Generate N samples X1, X2,..., X20 ∼ Exponential(3) for N large (N = 10^4,
+#if possible). Use these samples to estimate the probability P(1/6 ≤ M20 ≤ 1/2). How
+#does your answer compare to what the central limit theorem gives as an approximation?
+generate_Mn<-function(n=20){
+	X<-rexp(n, rate=3) #Generate values of X from Exponential(3) distribution
+	return(mean(X))
+}
+#Generate samples: 
+M20<-replicate(10^4, generate_Mn())
+
+#Plot: 
+hist(M20)
+
+#Estimated probability P(1/6 ≤ M20 ≤ 1/2):
+sum(ifelse(M20 >= 1/6 & M20 <= 1/2, 1, 0))/10^4
+
+#From the CLT: 
+pnorm(0.5, mean(M20), sd(M20)) - pnorm(1/6, mean(M20), sd(M20))
+
+#Alternate method (using CLT still): 
+#Could manually calculate zscores: 
+z_max<-(0.5-mean(M20))/sd(M20)
+z_min<-((1/6)-mean(M20))/sd(M20)
+pnorm(z_max) - pnorm(z_min)
+
+
+#-------------------------------------------------------------------------------
+#4.4.19
+#Generate N samples X1, X2,..., X20 ∼ Binomial(10, 0.01) for N large (N = 10^4,
+#if possible). Use these samples to construct a density histogram
+#of the values of M20. Comment on the shape of this graph.
+generate_Mn<-function(n=20){
+	X<-rbinom(n, 10, 0.01) #Generate values of X from Binomial(10, 0.01) distribution
+	return(mean(X))
+}
+#Generate samples: 
+M20<-replicate(10^4, generate_Mn())
+
+#Plot: 
+hist(M20)
+
+

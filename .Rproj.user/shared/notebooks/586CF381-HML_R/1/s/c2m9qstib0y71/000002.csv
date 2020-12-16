@@ -1,0 +1,27 @@
+"0","```r
+
+
+# select and parse relevant variables
+compustat <- data.ccm %>%
+  transmute(
+    gvkey = as.integer(gvkey),         # firm identifier
+    permno = as.integer(lpermno),      # stock identifier
+    datadate = ymd(datadate),          # date of report
+    linktype = as.character(linktype), # link type
+    linkenddt = ymd(linkenddt),        # date when link ends to be valid
+    seq = as.numeric(seq),             # stockholders' equity
+    ceq = as.numeric(ceq),             # total common/ordinary equity
+    at = as.numeric(at),               # total assets
+    lt = as.numeric(lt),               # total liabilities
+    txditc = as.numeric(txditc),       # deferred taxes and investment tax credit
+    txdb = as.numeric(txdb),           # deferred taxes
+    itcb = as.numeric(itcb),           # investment tax credit
+    pstkrv = as.numeric(pstkrv),       # preferred stock redemption value
+    pstkl = as.numeric(pstkl),         # preferred stock liquidating value
+    pstk = as.numeric(pstk)           # preferred stock par value
+    #indfmt = as.character(indfmt),     # industry format, you would do this if you haven't already done this when you obtained the data
+    #datafmt = as.character(datafmt)    # data format, you would do this if you haven't already done this when you obtained the data
+  ) 
+
+
+```"

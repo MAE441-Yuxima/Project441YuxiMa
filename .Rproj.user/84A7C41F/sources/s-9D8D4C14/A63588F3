@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1608088687656.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "A63588F3",
+    "lastKnownWriteTime" : 1608110262,
+    "last_content_update" : 1608110262733,
+    "path" : "~/Project441YuxiMa/R/allplot.R",
+    "project_path" : "R/allplot.R",
+    "properties" : {
+        "cursorPosition" : "13,17",
+        "scrollLine" : "1",
+        "tempName" : "Untitled2"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

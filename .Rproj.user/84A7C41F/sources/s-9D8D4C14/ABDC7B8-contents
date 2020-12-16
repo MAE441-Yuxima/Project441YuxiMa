@@ -1,0 +1,30 @@
+library(AER)
+library(plm)
+
+data("USAirlines", package = "AER")
+
+
+## Example 13.1, Table 13.1
+fm_no <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "pooling")
+fm_gm <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "between")
+fm_firm <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "within")
+fm_time <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "within",
+effect = "time")
+fm_ft <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "within",
+effect = "twoways")
+summary(fm_no)
+summary(fm_gm)
+summary(fm_firm)
+fixef(fm_firm)
+summary(fm_time)
+fixef(fm_time)
+summary(fm_ft)
+fixef(fm_ft, effect = "individual")
+fixef(fm_ft, effect = "time")
+
+## Table 13.2
+fm_rfirm <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "random")
+fm_rft <- plm(log(cost) ~ log(output) + log(price) + load, data = usair, model = "random",
+effect = "twoways")
+summary(fm_rfirm)
+summary(fm_rft)

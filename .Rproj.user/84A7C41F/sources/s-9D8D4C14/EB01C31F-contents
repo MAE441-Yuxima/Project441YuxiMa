@@ -1,0 +1,759 @@
+---
+title: "HW2_Yuxi Ma"
+chunk_output_type: console
+editor_options: null
+output:
+  pdf_document:
+    toc: yes
+    latex_engine: pdflatex
+  fig_caption: yes
+  highlight: haddock
+  df_print: paged
+  number_sections: yes
+  html_document:
+    df_print: paged
+    toc: yes
+fontsize: 10.5pt
+fontfamily: mathpazo
+arthur: Yuxi Ma
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(tidy.opts=list(width.cutoff=60))
+#install.packages("pastecs")
+library(pastecs)
+library(ggplot2)
+```
+
+# Question 1
+Original dataset source: https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data?select=train.csv
+
+I will choose the following variables and reasons as follows:
+1> LotArea: Lot size in square feet
+The total size of the house is an important factor to consider when determining the price. Intuitively, keeping other factors the same, the larger the LotArea, the higher the price. 
+
+2> MSSubClass: Identifies the type of dwelling involved in the sale.
+Even with the same total area, people have their specific preference for different types of dwelling. If the demand for one type of dwelling is high, the price us expected to be high.
+
+3> MSZoning: Identifies the general zoning classification of the sale.
+The type of zoning also matters. I'm not sure what's case for the U.S., but here in China, commercial property in most cases are much expensive than residential one, to name one.
+
+4> Utilities: Type of utilities available
+The utilities listed here in the this variable contains Electricity, Gas, Water, and Septic Tank. Generally speaking, with all the other factors like location and type constant, the more utilities a house provides, the higher the price.
+
+5> SaleType: Type of sale
+The sale type here consists of warranty deed, contract, low down payment, cash etc. It is possible that if the type pf sale is favorable, all others the same, the demand for this house will increase, then this will lift the final house price.
+
+6> MiscVal: $Value of miscellaneous feature
+It is hard to tell plainly the direction of the effect of this factor. If the miscellaneous feature does help to mitigate some hardship when living there, then it increases the final house price.
+
+7> OverallCond: Rates the overall condition of the house
+In China here, when considering buying or renting a house, we will browse all the related applications to see what's the rating of this house. With a poor rating, this house may even directly drop out of our dream house list.
+
+8> ExterQual: Evaluates the quality of the material on the exterior 
+To my understanding, the quality of the material on the exterior may in some way affect the outlooking of this house. Based on that, intuitively, in most cases people will tend to live in houses with good exterior material and outlooking. And with the demand increases, the prices tend to go up.
+
+9> GrLivArea: Above grade (ground) living area square feet
+This directly measures living area. With the total area the same, if the living area is larger, the price may be higher.
+
+10> Functional: Home functionality (Assume typical unless deductions are warranted)
+This variable rates from "Typical Functionality" to "Salvage Only", and nomarly, keeping other factors constant, this flows from the most prefered to the least, therefore, with more favorable characteristics, the price tends to be higher.
+
+(a) Provide a descriptive analysis of your variables. This should include histograms and fitted distributions, quantile plots, correlation plot, boxplots, scatterplots, and statistical summaries (e.g., the five-number summary). All figures must include comments.
+Answer:
+```{r, warning=FALSE, message=FALSE}
+train = read.csv("train.csv", header = TRUE)
+train_used = data.frame(train$SalePrice ,train$MSSubClass, train$MSZoning, train$LotArea, train$Utilities, train$SaleType, train$MiscVal, train$OverallCond, train$ExterQual, train$GrLivArea, train$Functional)
+colnames(train_used) <- c("SalePrice" ,"MSSubClass", "MSZoning", "LotArea", "Utilities", "SaleType", "MiscVal", "OverallCond", "ExterQual", "GrLivArea", "Functional")
+
+desc_table = stat.desc(train_used, basic = FALSE)
+desc_table
+```
+
+```{r, warning=FALSE, message=FALSE}
+##Dependent Variable
+par(mfrow=c(3,1), mar=c(2, 2, 1, 1) + 0.1)
+#Histogram
+hist(train_used$SalePrice, col="skyblue4", main = "Sale price", freq = FALSE)
+#fitted distributions
+lines(density(train_used$SalePrice),lwd = 2, col ="red")
+#quantile plots
+qqnorm(train_used$SalePrice)
+#boxplots
+boxplot(train_used$SalePrice, data = train_used)
+```
+  From the hitogram and box plot above, we can see that the sample dependent variable here is right-skewed, we can see significant amount of outliers in the upper end in box plot. From the Q-Q plot, in the middle range, approximately (-2,1), there's an approximately linear relationship between our variable SalePrice and normal distribution, which can be estimated to be normal. However, when reaching the two ends, due to the influence of extreme values, the curve becomes curved. 
+  To make this variable more valid, I try to take log of SalePrice.
+```{r}
+library(car)
+lSalePrice = log(train_used$SalePrice)
+
+hist(lSalePrice, col="skyblue4", main = "Sale price", freq = FALSE)
+lines(density(lSalePrice),lwd = 2, col ="red")
+```
+By looking at this graph, the sale price looks more like normally distributed now. Therefore, we decide to use lSalePrice instead of SalePrice alone.
+
+```{r, warning=FALSE, message=FALSE}
+##Variable 1
+par(mfrow=c(3,1), mar=c(2, 2, 1, 1) + 0.1)
+#Histogram
+hist(train_used$MSSubClass, col="skyblue4", main = "Type of Dwelling", freq = FALSE)
+#fitted distributions
+lines(density(train_used$MSSubClass),lwd = 2, col ="red")
+#quantile plots
+qqnorm(train_used$MSSubClass)
+#boxplots
+boxplot(train_used$MSSubClass, data = train_used)
+```
+Obeservations from the graphs above:
+1> It is highly right skewed by looking at the histogram with fitted density line.
+2> It is hard to be considered normal after analysing the Q-Q plot. As in the plot, only a short range in the middle can be considered approximately linear, but for those near the ends, they are almost horizontal.
+3> There are considerably extreme values in the upper end as the box plot shows.
+The conclusion may be that this variable needs transforming.
+
+```{r}
+##Variable 2, 4, 5. 8, 10
+#Bar chart
+
+##Variable 2
+counts2 <- table(train_used$MSZoning)
+barplot(counts2, col="skyblue4", main = "Zoning Classification of the Sale")
+```
+According to the bar chart above, the most frequent zoning type of the sale is RL (Residential Low Density), after that is RM (Residential Medium Density). Also, based on the descriptive file, there should be total 8 types of zoning, but in our data set there are only 5 of them, and the distribution is center to one type.
+
+```{r}
+##Variable 4
+counts4 <- table(train_used$Utilities)
+bar = barplot(counts4, col="skyblue4", main = "Type of utilities available")
+text(bar, counts4, pos = "3")
+```
+As described before, there are total 4 types of utilities offered. But in our data, there are only 2 of them, and nearly all of them have value AllPub, which means that the house offers all utilities.
+
+```{r}
+##Variable 5
+counts5 <- table(train_used$SaleType)
+barplot(counts5, col="skyblue4", main = "Type of sale")
+```
+From the bar chart, we can see that this categorical variable is also quite un-balanced. Most of the houses are sold via WD, New and COD, which are Warranty Deed - Conventional, Home just constructed and sold, and Court Officer Deed/Estate respectively.
+
+```{r}
+##Variable 8
+counts8 <- table(train_used$ExterQual)
+barplot(counts8, col="skyblue4", main = "Quality of the exterior material")
+```
+Similar unbalanced categorical variable here. But luckly, no house is found to have poor quality of exterior material. The majority of them are of average level (TA), while still a lot of them are considered good (Gd).
+
+```{r}
+##Variable 10
+counts0 <- table(train_used$Functional)
+barplot(counts0, col="skyblue4", main = "Home functionality")
+```
+It seems all the categorical variable picked here are quite unbalanced. Here, almost all houses sold are of typical functionality. 
+
+```{r}
+##Variable 3
+#Histogram
+hist(train_used$LotArea, col="skyblue4", main = "Lot size in square feet", freq = FALSE)
+#fitted distributions
+lines(density(train_used$LotArea),lwd = 2, col ="red")
+```
+Highly right-skewed, whith the majority of them distribute around 0.
+
+```{r}
+#quantile plots
+qqnorm(train_used$LotArea)
+```
+In both ends, there are considerable outliers leading to non-normality, in between, this variable can be viewed approximately as normal.
+
+```{r}
+#boxplots
+boxplot(train_used$LotArea, data = train_used)
+```
+  Same result as the previous graph, here it shows significant outliers in the upper end.
+  Here I try to take log of this variable to see whether it gets better.
+```{r}
+lLotArea = log(train_used$LotArea)
+hist(lLotArea, col="skyblue4", main = "Lot size in square feet", freq = FALSE)
+lines(density(lLotArea),lwd = 2, col ="red")
+```
+As it looks a lot better, I will try to attach and leverage this transformed log form.
+
+```{r}
+##Variable 6
+#Histogram
+hist(train_used$MiscVal, col="skyblue4", main = "$Value of miscellaneous feature", freq = FALSE)
+#fitted distributions
+lines(density(train_used$MiscVal),lwd = 2, col ="red")
+```
+As the previous variable, the values all centered in the range near to 0.
+
+```{r}
+#quantile plots
+qqnorm(train_used$MiscVal)
+```
+As the previous graph shows, nearly all the data gather into a small range, that can also be seen here, as the sample's quantiles almost lie on a horizontal line.
+
+```{r}
+#boxplots
+boxplot(train_used$MiscVal, data = train_used)
+```
+Similarly, very concentrated data with influencial outliers. Trying log here:
+
+```{r}
+lMiscVal = log(train_used$MiscVal)
+hist(lMiscVal, col="skyblue4", main = "$Value of miscellaneous feature", freq = FALSE)
+lines(density(lMiscVal),lwd = 2, col ="red")
+```
+Similarly, we attach this new log variable to the dataset.
+
+```{r}
+##Variable 7
+#Histogram
+hist(train_used$OverallCond, col="skyblue4", main = "the overall condition of the house", freq = FALSE)
+#fitted distributions
+lines(density(train_used$OverallCond),lwd = 2, col ="red")
+```
+This variable shows the rating of the house condition, can see from the above histogram that the rating tends to be high, as the proportion of rating above the middle number 5 is higher than what's below.
+
+```{r}
+#quantile plots
+qqnorm(train_used$OverallCond)
+```
+As this variable is an indicator variable, that's why the graph above is discrete. But overall, except for the middle part between -1 and 0, the amount is clearly larger than other ranges, this variable works well as there's briefly a upward line fitting the sample's quantiles and that for normal variables.
+
+```{r}
+#boxplots
+boxplot(train_used$OverallCond, data = train_used)
+```
+As the box plot shows, the distribution of this variable seems more symmetric than all the variables above. There are still some outliers, but they somehow distribute much evenly than previous variables.
+
+```{r}
+##Variable 9
+#Histogram
+hist(train_used$GrLivArea, col="skyblue4", main = "Above grade (ground) living area square feet", freq = FALSE)
+#fitted distributions
+lines(density(train_used$GrLivArea),lwd = 2, col ="red")
+```
+As the histogram shows, the distribution of the above grade (ground) living area is also right skewed, with data centers in lower value range.
+
+```{r}
+#quantile plots
+qqnorm(train_used$GrLivArea)
+```
+As the plot shows above, in some small range in the middle, the variable may be approximated as normally distributed, but as the range extends, it becomes curved, affected by the extreme values.
+
+```{r}
+#boxplots
+boxplot(train_used$GrLivArea, data = train_used)
+```
+The box plot reveals the same result as previous histogram, there are quite some outliers in the upper end. Try log here:
+```{r}
+lGrLivArea = log(train_used$GrLivArea)
+hist(lGrLivArea, col="skyblue4", main = "Above grade (ground) living area square feet", freq = FALSE)
+lines(density(lGrLivArea),lwd = 2, col ="red")
+```
+It seems taking log does not help that much, we further take a look at Q-Q plot.
+```{r}
+qqnorm(lGrLivArea)
+```
+The Q-Q plot looks more linear that the original one. So we finally decide to adopt the log one.
+
+```{r}
+#Scatterplot
+plot(lSalePrice, ylab = "Log(Sale Price)", col = "blue", main = "Log Sale Price")
+lines(lowess(lSalePrice), col="red")
+```
+The scatterplot here reveals that the distribution of lSalePrice is somehow evenly around a mean value.
+
+```{r}
+#Scatterplot
+plot(lLotArea, ylab = "Log(Lot Area)", col = "blue", main = "log Lot Area")
+lines(lowess(lLotArea), col="red")
+```
+Similar result as the condition of log(SalePrice). The value of lLotArea distributes around a mean value.
+
+```{r}
+plot(lMiscVal, ylab = "log(Value of miscellaneous feature)", col = "blue", main = "log Value of miscellaneous feature")
+lines(lowess(lMiscVal), col="red")
+```
+Similarly, the distribution of this variable is, to some extent, stable around one value.
+
+```{r}
+plot(lGrLivArea, ylab = "log(Above ground living area)", col = "blue", main = "Log Above ground living area)")
+lines(lowess(lGrLivArea), col="red")
+```
+A similar result, and just by observation, this variable seems to be more symmetric than those above.
+
+(b) For each variable (except indicator ones), test if a transformation to linearity is appro- priate, and if so, apply the respective transformation, and comment on the transformed predictor(s).
+Answer:
+```{r, warning=FALSE, message=FALSE, echo=TRUE}
+# Except for indicator and categorical variables, there are total 3 variables - LotArea, MiscVal, and GrLivArea
+library(car)
+
+#LotArea
+p1 <- powerTransform(LotArea ~ 1, data=train_used, family="bcPower")
+summary(p1)
+```
+The result above shows that the best estimated power is 0.0309, which is close to 0. At the same time, the p-values right after that indicating that log transformation is needed. Therefore, we choose to take the log of this value.
+
+```{r}
+#MiscVal
+p2 <- powerTransform(MiscVal+1 ~ 1, data=train_used, family="bcPower")
+summary(p2)
+```
+The result above shows that the best estimated power is -4.2835.
+
+```{r}
+#GrLivArea
+p3 <- powerTransform(GrLivArea ~ 1, data=train_used, family="bcPower")
+summary(p3)
+```
+The result above shows that the best estimated power is 0.0063, which is close to 0. At the same time, the p-values right after that indicating that log transformation is needed. Combining the descriptive graphs above, I decide to adopt the log transformation.
+
+```{r}
+#Transform MiscVal
+transformed_MiscVal <- bcPower(train_used$MiscVal, lambda = -4.2835, gamma = 1)
+
+train_used = cbind(train_used, transformed_MiscVal)
+colnames(train_used)[12] <- "transformed_MiscVal"
+
+par(mfrow=c(3,1), mar=c(2, 2, 1, 1) + 0.1)
+plot(train_used$MiscVal, main = "Untransformed value of MiscVal", col = "blue")
+lines(lowess(train_used$MiscVal), col="red")
+
+plot(train_used$transformed_MiscVal, main = "Transformed value of MiscVal", col = "blue")
+lines(lowess(train_used$transformed_MiscVal), col="red")
+
+plot(lMiscVal, main = "Log value of MiscVal", col = "blue")
+lines(lowess(lMiscVal), col="red")
+```
+  Comparing the transformed, untransformed and log data, the first obvious difference is that the range of the dependent variable narrows to range (0,1) in the transformed variable, and narrows to (3,10) in the log one. 
+  The 2nd point is that for transformed values, there are actually more outliers relatively. Another point is that the distribution of the transformed data is relatively more extreme, for example, all the values lie in two ends, with rarely points in between.
+  However, as also can be seen from the graph, there's less points in log value. I make further checks and I find out that a tons of the $lMiscVal = -\infty$. To figure out why this happens, I return to the original data, and I find that there are tons of 0 there. Therefore, To avoid missing too many observations, I finally decide to drop this value.
+
+(c) Estimate a multiple linear regression model that includes all the main effects only (i.e., no interactions nor higher order terms). We will use this model as a baseline. Comment on the statistical and economic significance of your estimates. Also, make sure to provide an interpretation of your estimates. Note: You can use any combination of transformed and untransformed variables from the model in part (b).
+Answer:
+```{r}
+library(tidyverse)
+library(dplyr)
+train_used1 = cbind(lSalePrice, train_used, lLotArea, lMiscVal, lGrLivArea)
+train_used2 = select(train_used1, c('lSalePrice', 'lLotArea', 'lGrLivArea', 'MSSubClass', 'MSZoning', 'Utilities', 'SaleType', 'Functional', 'OverallCond', 'ExterQual'))
+train_used2 = na.omit(train_used2)
+base_model <- lm(lSalePrice ~ ., data = train_used2)
+S(base_model)
+```
+Here, I include the transformed MiscVal (transformed_MiscVal) only. Because I think the range of the transformed ones is smaller than the original ones, which makes this variable less dispersed. The reason not including both is to avoid multicollinearity between them.
+
+Some observations from the regression results:
+1> Significance (p-value):
+  Under the significance level $\alpha = 0$, the following variables are significant: the intercept, lLotArea, lGrLivArea, all classifications of MSZoning, SaleTypeNew (one sale type, Home just constructed and sold), FunctionalTyp (one type of home functionality, Typical Functionality), OverallCond, and all classifications in ExterQual.
+  Under the significance level $\alpha = 0.001$, one variable is significant: SaleTypeCon (one sale type, Contract 15% Down payment regular terms).
+  Under the significance level $\alpha = 0.01$, 3 variables are significant: MSSubClass, SaleTypeWD (Warranty Deed - Conventional), and FunctionalMaj2 (Major Deductions 2).
+  Under the significance level $\alpha = 0.05$, 2 variables are significant: SaleTypeCWD (Warranty Deed - Cash) and FunctionalSev (Severely Damaged).
+
+2> Model significance (F-test):
+  According to the p-value of F-test, we can reject the null hypothesis that all the parameters equal to 0 under the default significance level, which indicates that this model makes sense in the whole.
+
+3> Goodness of fit (R-squared):
+  In the regression result above, the estimated R-squared $R^2 = 0.7757$, which to some extent, shows that on average, 77.57% of the sample can be explained by this model.
+
+4> Interpretation:
+  For categorical variables, firstly we have to determine the base model. 
+(a) MSZoning: the base model here is A (Agriculture). The coefficients estimated here are the average sales price difference between this type of zoning area and the base one. For example, the estimated coefficient 0.6156828 of the variable MSZoningFV means that on average, the sales price of those houses in area Floating Village Residential are expected to be 61.57% higher than that of houses in Agriculture area.
+(b) SaleType: the same explanatory logic as MSZoning, the base model for this variable is COD (Court Officer Deed/Estate).
+(c) Functional: the same way of interpretation, the base model is Maj1 (Major Deductions 1).
+(d) ExterQual: the same logic with base model Ex (Excellent).
+
+  For numeric variables, the interpretation is as follows:
+(a) lLotArea: in this case, as both the explanatory and explained variables are in log forms, we should adopt the percentage change interpretation to the estimated coefficient. The estimates of 0.0771996 here means that when LotArea increases by 1%, on average, the sales price tends to increase by 0.0771996%.
+(b) lGrLivArea: The interpretation for the estimate 0.5958872 is that when the above ground living area increase by 1%, on average, the sales price tends to increase by 0.5958872%.
+(c) MSSubClass: as MSSubClass is an indicator variable, the estimate of -0.000324 means that when MSSubClass increase by 1 unit, the sales price tends to decrease by 0.0324% on average.
+(d) OverallCond: This variable is also an indicator one, when the value of OverallCond increases, it means the rating for this house’s condition is higher, indicating a better condition. Therefore, the estimate of 0.0288243 means when the rating increase by 1 unit, this house’s sales price tends to increase by 2.88243% on average.
+
+
+(d) In your model from part (c), identify if there are any outliers worth removing. If so, remove them but justify your reason for doing so and re-estimate your model from part (c)
+Answer:
+```{r}
+#Outliers
+plot(base_model, 1)
+```
+We can see from the graph that most of the residuals lie between (-0.9, 0.9), with only 3 of them fall outside of this region, thus we identify these 3 as influencial outliers. 
+```{r}
+#Remove influencial outliers
+base_model_outlier = lm(lSalePrice ~ ., data = train_used2, subset = abs(base_model$resid)<=0.9)
+S(base_model_outlier)
+```
+  Observations as follows:
+1> After removing the possible influential outliers, the R-squared becomes larger in this new model *base_model_outlier*, which means that this new model fits the data better.
+2> In this new model, the residual standard deviation decreases from the previous 0.1909 to 0.1814, which partially means that this model fits data better (less dispersion, more concentrated around the sample), partially it may also due to the decrease in the degree of freedom (however, as the degree of freedom being quite large initially, this may not be the leading reason).
+3> After removing 3 possible influential outliers, the variable *FunctionalMaj2* becomes more significant.
+
+(e) Use Mallows Cp for identifying which terms you will keep from the model in part (d) and also test for multicollinearity. Based on your findings estimate a new model.
+Answer:
+```{r}
+#install.packages("leaps")
+library(leaps)
+
+mallows <- regsubsets(lSalePrice ~ ., data = train_used2, subset = abs(base_model$resid)<=0.9, method=c("exhaustive"))
+subsets(mallows, statistic = "cp", legend = F, main = "Mallows CP",col ="steelblue4")
+legend(15,1500,bty="y",legend=c('IL=lLotArea','IG=lGrLivArea','MSZF=MSZoningFV','MSZRL=MSZoningRL','FT=FunctionalTyp','EQF=ExterQualFa', 'EQG=ExterQualGd','EQT=ExterQualTA'),col="steelblue4")
+```
+According to the Mallows Cp, the model $$lSalePrice = lLotArea + lGrLivArea + MSZoningFV + MSZoningRL + FunctionalTyp + ExterQualFa + ExterQualGd + ExterQualTA$$ seems to be prefered by Cp.
+
+```{r}
+#Test for multicollinearity
+mallows_mod = lm(lSalePrice~lLotArea + lGrLivArea + MSZoning + ExterQual + Functional, data = train_used2, subset = abs(base_model$resid)<=0.9)
+S(mallows_mod)
+```
+
+```{r}
+vif(mallows_mod)
+```
+From the VIF table above, all the variables being selected seem to have no multicollinearity problem.
+
+(f) For your model in part (e) plot the respective residuals vs. y, and comment on your results.
+Answer:
+```{r}
+plot(mallows_mod$fitted.values, mallows_mod$residuals, pch=20, ylab="Resdiduals", xlab="Log Sales price")
+abline(h=0,col="red", lwd=2)
+```
+  Conclusions from the residual plot above:
+1> Mean: by observing, the errors are expected to evenly distributed around 0, which make assumption $E(\epsilon) = 0$ valid. 
+2> Standard deviation: intuitively from the graph, we can see that there's no obvious dispersion, which means that to some extent, the variability of errors approximates a constant. This makes the assumption $var(\epsilon) = \sigma^2$ valid.  
+
+(g) Using AIC and BIC for model comparison, identify which model is better, (c) or (e). Why?
+Answer:
+```{r}
+#AIC
+AIC(base_model, base_model_outlier, mallows_mod)
+```
+From the AIC shown above, it seems that the original base model with the outliers removed is a preferred choice as AIC is the lowest for base_model_outlier.
+
+```{r}
+#BIC
+BIC(base_model, base_model_outlier, mallows_mod)
+```
+Here BIC gives the same result as AIC, as the BIC is the lowest when applying model 2 (base_model_outlier).
+
+(h) Estimate a model based on (g) that includes interaction terms and if needed, any higher power terms. Comment on the performance of this model compared to your other two models.
+Answer:
+```{r}
+#Test for multicollinearity first
+vif(base_model_outlier)
+```
+It seems there's no multicollinearity for this model.
+
+```{r}
+inter_mod = lm(lSalePrice~(lLotArea+lGrLivArea+MSSubClass+MSZoning+Utilities+SaleType+Functional+OverallCond+ExterQual)^2, data = train_used2, subset = abs(base_model$resid)<=0.9)
+S(inter_mod)
+```
+  Observations from comparing the model with interaction & quadratic terms and the base model with the outliers removed:
+1> Goodness of fit: in this new model with interaction and quadratic terms, the R-squared turns out to be higher and the residual standard deviation becomes lower, which both shows this new model fits the sample better.
+2> For the original variables, the majority of them in this new model turn out to be insignificant with only MSSubClass, SaleTypeCon, SaleTypeLI, SaleTypeNew, and SaleTypeWD remain significant under different significance level.
+3> For interaction & quadratic terms, most of them turns out to be insignificant, while only the terms lLotArea:MSSubClass, lLotArea:SaleTypeCon, lLotArea:SaleTypeConLI, lLotArea:FunctinalMod, lGrLivArea:MSSubClass, lGrLivArea:MSZoning, lGrLivArea:SaleTypeLI, lGrLivArea:SaleTypeNew, lGrLivArea:FunctionalMod, MSSubClass:MSZoning, MSSubClass: SaleTypeConLI, MSSubClass: ExterQualTA, MSZoningRL:SaleTypeConLI, MSZoningFV:SaleTypeNew, MSZoningRH:SaleTypeWD, MSZoningRL:SaleTypeWD, MSZoningRM:SaleTypeWD, MSZoning:OverallCond, MSZoningFV: ExterQualTA and MSZoningRL: ExterQualTA are significant under different significance level.
+4> Interpretation: with all the interaction and quadratic forms included, the interpretation of each estimates is not that straightforward as before. In this case, we have to take derivatives of lSalePrice with respect to each significant predictor and then interpret the corresponding statistical and economic meaning of this variable. Or we can directly adopt $margins$ function
+
+(i) Lastly, choose you favorite model from all the ones estimated and perform a five-fold cross validation test on it. Then use the test.csv dataset to evaluate how well your model predicts home prices for out of sample data, and comment on your overall findings.
+Answer:
+For the last model with interaction terms, first thing to note is that the AIC & BIC for this model gives contrary conclusion as AIC shows that this model is preferred among all the models we encountered so far while BIC states otherwise. Although facing this contradictory results, I will still choose the base_model_outlier, because relatively speaking, this model introduces a lot of predictors as well as noises, which makes the estimate tedious. Therefore, I finally pick base_model_outlier.
+```{r}
+#install.packages("caret")
+library(caret)
+
+train_control<- trainControl(method="cv", number=5, savePredictions = TRUE, returnResamp = 'all')
+model <- train(lSalePrice ~ ., subset = abs(base_model$resid)<=0.9, data=train_used2, trControl=train_control, method="rpart")
+```
+
+```{r}
+#Upload and format the test files
+test = read.csv("test.csv", header = TRUE)
+price = read.csv("sample_submission.csv", header = TRUE)
+#Do the same transformation in this test database
+test_used = data.frame(test$MSSubClass, test$MSZoning, test$LotArea, test$Utilities, test$SaleType, test$OverallCond, test$ExterQual, test$GrLivArea, test$Functional)
+colnames(test_used) <- c("MSSubClass", "MSZoning", "LotArea", "Utilities", "SaleType", "OverallCond", "ExterQual", "GrLivArea", "Functional")
+
+test_used = cbind(price, test_used)
+
+lSalePrice = log(test_used$SalePrice)
+test_used = cbind(lSalePrice, test_used)
+
+lLotArea = log(test_used$LotArea)
+test_used = cbind(test_used, lLotArea)
+
+lGrLivArea = log(test_used$GrLivArea)
+test_used = cbind(test_used, lGrLivArea)
+
+test_used1 = dplyr::select(test_used, SalePrice, lSalePrice, lLotArea, lGrLivArea, MSSubClass, MSZoning, Utilities, SaleType, Functional, OverallCond, ExterQual)
+
+test_used1 = na.omit(test_used1)
+
+predictions <- model %>% predict(test_used1)
+SalePrice_predict = exp(predictions)
+
+#Test the prediction result
+data.frame(
+  RMSE = RMSE(SalePrice_predict, test_used1$SalePrice), 
+  R2 = R2(SalePrice_predict, test_used1$SalePrice)
+)
+```
+Unfortunately, according to the result shown here, the estimated model does not have strong predicting power. By re-assessing the data used, I figure out this may due to some variables having only 1 or 2 values, such as Utilities. By looking at the graphs drawn in part (a), we can also reach the same conclusion as the marjority of them value in a narrow range. Thus, as the predictors have only a few values, the possible outcomes of the predicted sales price is also quite limited, which makes the prediction less likely to be accurate.
+
+# Question 2
+Assume a healthcare insurance company hired you as a consultant to develop an econometric model to estimate the number of doctor visits a patient has over a 3 month period. The rational behind this study is that patients with a higher number of doctors visits would pose a higher liability in terms of insurance expenses, and therefore, this may be mitigated via a higher insurance premium. The panel data are from the *German Health Care Usage Dataset*, and consist of 7,293 individuals across varying numbers of periods with a total of 27,326 observations.
+
+(a) Build a multiple regression model with a subset of 10 predictors (at most), including interaction and non-linear transformations if appropriate. For this part you only need to briefly discuss a justification for the model chosen, and discuss the respective regression output.
+Answer:
+The predictors I will use includes FEMALE, AGE, HEALTHY, EDUC, LOGINC, and ALC. The variable DOCVIS is what we want to estimate.
+```{r}
+german_healthcare_usage = read.csv("german_healthcare_usage.csv", header = TRUE)
+#Convert the panel data into cross-sectional one
+count = table(german_healthcare_usage$YEAR)
+bartest = barplot(count)
+
+count[which.max(count)] #1988 4483
+```
+According to the analysis above, we can see that the mode of time variable is year 1988, with total 4483 observations. Therefore, we choose YEAR=1988.
+
+```{r}
+german_healthcare_usage = subset(german_healthcare_usage, YEAR == 1988)
+
+partA <- dplyr::select(german_healthcare_usage, DOCVIS, FEMALE, AGE, HEALTHY, EDUC, LOGINC, ALC)
+
+#First remove NA's
+partA <- na.omit(partA)
+
+#Descriptive analysis
+stat.desc(partA)
+```
+  Observations from the summary above: for dummies we first look at their means. $E(FEMALE) \approx 0.48 < 0.5$, as female = 1 & male = 0, we can see that in our sample, the number of males outweighs that of female. Similarly for HEALTH, as $E(HEALTH) \approx 0.61 > 0.5$, together with self-reported to be healthy = 1; otherwise = 0, we can say that a larger proportion of observations here report themselves to be healthy.
+  For AGE, we can see that our observations ages range from 25 to 64. The EDUC shows our sample's years of education ranges from 7 to 18 years.
+
+```{r}
+#Descriptive plots
+#Explained variable: DOCVIS
+hist(partA$DOCVIS, breaks ="FD", col="skyblue2", freq = FALSE, ylab = "Density")
+lines(density(partA$DOCVIS),lwd = 2, col ="red")
+rug(partA$DOCVIS)
+```
+DOCVIS is highly right-skewed.
+
+```{r}
+qqPlot(~ DOCVIS, data=partA, id=list(n=3))
+```
+From the graph above, it gives the overall quantile plot of DOCVIS, from which we can see that this varible is not normally distributed.
+
+```{r}
+qqPlot(DOCVIS ~ FEMALE, data=partA, layout = c(1,2))
+```
+Similar result as the previous graph in each subsets when we divide them by gender.
+
+```{r}
+qqPlot(DOCVIS ~ HEALTHY, data=partA, layout = c(1,2))
+```
+Similar result as before in each subsets when we divide them by self-reported health condition.
+
+```{r}
+#AGE
+hist(partA$AGE, breaks ="FD", col="skyblue2", ylab = "Density")
+```
+From the graph above, we can roughly say that the age of our sample is evenly distributed to some extent.
+
+```{r}
+#ALC
+hist(partA$ALC, breaks ="FD", col="skyblue2", freq = FALSE, ylab = "Density")
+lines(density(partA$ALC),lwd = 2, col ="red")
+rug(partA$ALC)
+```
+Similarly, roughly speaking, the distribution of average alcohol consumption in the last 3 months also tends to be uniform, especially in the middle.
+
+```{r}
+#LOGINC
+hist(partA$LOGINC, breaks ="FD", col="skyblue2", freq = FALSE, ylab = "Density")
+lines(density(partA$LOGINC),lwd = 2, col ="red")
+rug(partA$LOGINC)
+```
+From the histogram, the distribution of LOGINC is left-skewed.
+
+```{r}
+qqPlot(~ LOGINC, data=partA, id=list(n=3))
+```
+From the Q-Q plot above, this variable actually looks pretty well, with only values in the two ends deviating from the fitted line with normal quantiles.
+
+```{r}
+qqPlot(LOGINC ~ FEMALE, data=partA, layout = c(1,2))
+```
+Similar conclusion as the overall Q-Q plot in different gender groups.
+
+```{r}
+qqPlot(LOGINC ~ HEALTHY, data=partA, layout = c(1,2))
+```
+Similar conclusion as the overall Q-Q plot in different self-reported health condition groups.
+
+```{r}
+#EDUC
+hist(partA$EDUC, col="skyblue2", ylab = "Density", freq = FALSE)
+```
+From the histogram, we can see that the majority of observations have approximately 10 to 12 years of education. However, in two ends, the proportion is also relatively large, for example, there are still significant number of people have years of education 8 and 18.
+
+```{r}
+base = lm(DOCVIS~., data = partA)
+S(base)
+```
+  From the regression result, we can see that
+1> Goodness of fit: The R-squared is quite low as 0.0892, which means that approximately only 8.92% of the sample data can be explained by this model.
+2> Significance condition: Except for EDUC and ALC, all the other variables in this base model are significant at least under $\alpha = 0.001$.
+
+```{R}
+par(mfrow=c(2,2))
+plot(base, pch=20, lwd=2)
+```
+From these 4 graphs, the conclusion is that we certainly need to do some transformation, because as the graphs show, the residuals do not distribute evenly around 0, which means assumptions $E(\epsilon) = 0$ and $var(\epsilon^2) = \sigma^2$ fails. From the normal Q-Q plot, we can conclude that the residuals are not normally distributed.
+
+```{r}
+##Transformation
+#ALC
+p1 <- powerTransform(ALC ~ 1, data=partA, family="bcPower")
+summary(p1)
+#The table here shows that the best estimated lambda is 0.715
+
+transALC <- bcPower((partA$ALC+1), 0.715)
+partA_1 = cbind(partA, transALC)
+
+hist(partA_1$transALC, breaks ="FD", col="skyblue2", freq = FALSE, ylab = "Density")
+lines(density(partA_1$transALC),lwd = 2, col ="red")
+rug(partA_1$transALC)
+```
+
+```{r}
+#Transformation
+#DOCVIS
+p0 <- powerTransform(DOCVIS+1 ~ 1, data=partA, family="bcPower")
+summary(p0)
+```
+From the result above, the best estimated power is -0.4142, which means that the transformation is like this: $TransformedDOCVIS = \frac{1}{(DOCVIS + 1)^{0.4142}}$. To make it simpler, I finally adopt $\lambda = -0.5$, therefore, $TransformedDOCVIS = \frac{1}{\sqrt{(DOCVIS + 1)}}$.
+```{r}
+transDOCVIS = 1/sqrt(partA$DOCVIS+1)
+hist(transDOCVIS, breaks ="FD", col="skyblue2", freq = FALSE, ylab = "Density")
+lines(density(transDOCVIS),lwd = 2, col ="red")
+rug(transDOCVIS)
+```
+
+```{r}
+base1 = lm(transDOCVIS~FEMALE+AGE+HEALTHY+LOGINC+EDUC+transALC, data = partA_1)
+S(base1)
+```
+As the table shows, the significance condition does not change much while R-squared does improve by transforming. Therefore, I will adopt these transformations.
+
+```{r}
+#Test for multicollinearity
+vif(base1)
+```
+No multicollinearity detected.
+
+```{r}
+#Include interaction terms
+base_interact = lm(transDOCVIS~AGE+LOGINC+I(LOGINC^2)+FEMALE*EDUC+HEALTHY:EDUC+HEALTHY+HEALTHY:transALC, data = partA_1)
+S(base_interact)
+```
+
+```{r}
+#Decide a final model in part (a)
+base_a = lm(transDOCVIS~AGE+LOGINC+I(LOGINC^2)+FEMALE:EDUC+HEALTHY, data = partA_1)
+S(base_a)
+```
+  The reason why I finally pick this model is because according to the previous regression results, I first drop those insignificant variables, at the same time, I pay attention to the R-squared. This finally model has relatively high R-squared and neatly formatted.
+
+(b) Differences in Differences: In 1987 the German Government passed a series of legislations to improve healthcare access for unemployed people and women.
+i. Determine whether or not the policy worked for women.
+Answer:
+Since here we need to assess the DID model, I have to include all time series data and further adopt variables PUBLIC and UNEMPLOY.
+```{r}
+german_healthcare_usage = read.csv("german_healthcare_usage.csv", header = TRUE)
+
+partB <- dplyr::select(german_healthcare_usage, ID, YEAR1987, DOCVIS, PUBLIC, UNEMPLOY, NUMOBS, FEMALE, AGE, HEALTHY, EDUC, LOGINC, ALC)
+
+#First remove NA's
+partB <- na.omit(partB)
+
+which.max(table(partB$NUMOBS)) #7
+
+count(partB, partB$NUMOBS == 7) # TRUE 6209
+
+partB = subset(partB, NUMOBS == 7)
+
+#Descriptive analysis
+cbind(stat.desc(partB$PUBLIC), stat.desc(partB$UNEMPLOY))
+```
+  Interpreting the newly added variables PUBLIC & WORKING. As PUBLIC = 1 if this observation has been insured in public health insurance, = 0 otherwise, the mean of PUBLIC in our sample here is 0.903, which indicates that the number of people having public health insurance here outweighs those do not.
+  For UNEMPLOY, it equals 1 when one is unemployed, =0 if not. The mean of 0.262 means that there are less people being unemployed than those are not in our sample.
+
+*At first I thought that the policy change here may have something to do with the variable PUBLIC, as this variable to some extent may measure the observation's access to healthcare insurance. However, the misleading part is that variable DOCVIS can also be the indicator to meansure the healthcare insurance. I finally choose to adopt DOCVIS but nor PUBLIC.*
+```{r}
+#First generating the DID model seperately
+DID_gender = lm(DOCVIS~FEMALE*YEAR1987+AGE+LOGINC+ALC+EDUC+ID, data = partB)
+S(DID_gender)
+```
+  For the DID model here $$DOCVIS = \beta_1 + \beta_2FEMALE + \beta_3YEAR1987 + \delta FEMALE*YEAR1987 + \beta_iOTHERS + e$$, in this model, the relevant estimators used to determine whether this policy works for female involve $\beta_2$, $\beta_3$ and $\delta$. However, although via analysis we have to consider all these 3 estimates, 1> we take the difference between control group and treatment group in two time periods-before and after year 1987, and we get $D_{before1987}$ & $D_{after1987}$; 2> we take the difference of those 2 differences we get in step 1>, and that;s exactly the impact of Germany's 1987 policy on women, $Effect = D_{after1987} - D_{before1987}$.
+  Based on the logic above, to measure the impact of Germany's new legislation, the null hypothesis is $H_0:\delta = 0$. Unfortunately from the regression result table above, the p-value for $\delta$ is quite high 0.899, which means we cannot reject the null, and cannot prove that the regislation did help women.
+  Further, we test the residual of this regression:
+```{r}
+library(car)
+residualPlots(DID_gender, terms = ~1, type = "rstandard")
+```
+The residuals obviously fail the assumptions $E(\epsilon) = 0$ and $var(\epsilon^2) = \sigma^2$. We then try to transform DOCVIS based on the graph we draw previously in part a>.
+```{r}
+p0 <- powerTransform(DOCVIS+1 ~ 1, data=partB, family="bcPower")
+summary(p0) #-0.4
+
+#Apply the best estimated power here
+transDOCVIS = 1/(partB$DOCVIS+1)^0.4
+partBtrans = cbind(transDOCVIS, partB)
+
+DID_gender1 = lm(transDOCVIS~FEMALE*YEAR1987+AGE+LOGINC+ALC+EDUC+ID, data = partBtrans)
+S(DID_gender1)
+```
+Based on the regression table, Germany's new regislation does not seem to be effective for women.
+```{r}
+residualPlots(DID_gender1, terms = ~1, type = "rstandard")
+```
+To be honest, in this graph, the two assumptions $E(\epsilon) = 0$ and $var(\epsilon^2) = \sigma^2$ may still fail. However at least this graph looks pretty much better than the previous one, as more of the errors shown here to center around 0. In addition, from the graph, the errors seem to have some patterns in some range as they form a line.
+
+ii. Determine whether or not the policy worked for unemployed.
+Answer:
+```{r}
+DID_unemploy = lm(transDOCVIS~UNEMPLOY*YEAR1987+AGE+LOGINC+ALC+EDUC+ID, data = partBtrans)
+S(DID_unemploy)
+```
+Similarly, the regislation does not seem to work for the unemployed too as the p-value for the estimate of the interaction term is 0.15656 which is even higher than siginificance level $\alpha = 10%$.
+```{r}
+residualPlots(DID_unemploy, terms = ~1, type = "rstandard")
+```
+Similarly, the residuals fail the to meet $E(\epsilon) = 0$ and $var(\epsilon^2) = \sigma^2$ in this model, and it reveals some pattern in it. And to my understanding, it may due to the value of the transformed dependent variable DOCVIS. Here's the graph of transDOCVIS:
+```{r}
+scatterplot(1:length(transDOCVIS), transDOCVIS, lwd=3, id=TRUE)
+```
+Looking at purely the value of the transDOCVIS, there's certainly some patterns there. For example, approximately above 0.4, the value of transDOCVIS tends to form into different lines with no values in between, and this may be the cause of errors distributing in that ways like previously shown.
+
+(c) Test the hypothesis that the number of doctor visits a patient has over a 3 month period is greater for women than for men.
+Answer:
+Since variable FEMALE = 1 if the observation is female, = 0 otherwise, so to test the hypothesis that DOCVIS is greater for women than men is checking whether the estimate of FEMALE is positive, which means $H_0: \beta_{female} \leq 0$. If we reject the null, the estimate of FEMALE is expected to be positive statistically.
+```{r}
+#Adpot the DID_gender1 model here
+#DID_gender1 = lm(transDOCVIS~FEMALE*YEAR1987+AGE+LOGINC+ALC+EDUC+ID, data = partBtrans)
+t.test(DOCVIS~FEMALE, data = partB, alternative = "greater", mu = 0)
+```
+From the result shown above, with p-value = 1, we definitely cannot reject the null in this case, which means that we cannot reject the statement that the number of doctor visits a patient has over a 3 month period is less than or equal for women than for men.
+
+(d) Based on your findings propose and test your own hypothesis of interest using the linear functional form: $\lambda = c_1\beta_1 + c_2\beta_2 + ⋯.$
+Answer:
+In this part, I plan to test whether those who have higher income will tend to have more total number of doctor visits over a 3 month period. The logic behind this is maybe the riched one cares more about their wellbeing but pay no attention to the cost. Here's the test:
+```{r}
+DID_genderedu = lm(DOCVIS~FEMALE+EDUC+AGE+LOGINC+ALC+EDUC+ID, data = partB)
+S(DID_genderedu)
+```
+The null hypothesis here is $H_0: \beta_{LOGINC} \leq 0$, if we reject the null, it means that we tend to agree with the statement that the rich will have more doctor visits.
+```{r}
+t.test(partB$LOGINC, partB$DOCVIS, alternative = "greater", mu = 0)
+```
+As the result shows above, p-value is quite high, and we cannot reject the null, which means that we cannot prove the original statement that the rich will tend to have more doctor visits.

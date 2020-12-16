@@ -1,0 +1,13 @@
+{
+    "path" : "~/Project441YuxiMa/man",
+    "sortOrder" : [
+        {
+            "ascending" : false,
+            "columnIndex" : 1
+        },
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}

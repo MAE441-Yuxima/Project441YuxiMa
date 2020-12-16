@@ -1,0 +1,19 @@
+"0","```r
+library(dplyr)
+
+# parse only relevant variables
+crsp <- data.crsp.total %>%
+  transmute(permno = as.integer(permno),     # security identifier# keep only US-based common stocks (10 and 11)
+              date = ymd(date),                # month identifier
+            ret = as.numeric(ret) * 100,     # return (converted to percent)
+            shrout = as.numeric(shrout),     # shares outstanding (in thousands)
+            altprc = as.numeric(prc),     # last traded price in a month ##
+            exchcd = as.integer(exchcd),     # exchange code
+            shrcd = as.integer(shrcd),       # share code
+            siccd = as.integer(siccd),       # industry code
+            dlret = as.numeric(dlret) * 100, # delisting return (converted to percent)
+            dlstcd = as.integer(dlstcd)      # delisting code   
+  )
+
+
+```"

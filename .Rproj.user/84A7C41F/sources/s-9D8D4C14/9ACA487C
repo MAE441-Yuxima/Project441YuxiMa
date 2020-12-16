@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1608091467691.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "9ACA487C",
+    "lastKnownWriteTime" : 1608110126,
+    "last_content_update" : 1608110126233,
+    "path" : "~/Project441YuxiMa/R/knn_impute.R",
+    "project_path" : "R/knn_impute.R",
+    "properties" : {
+        "cursorPosition" : "3,80",
+        "scrollLine" : "0",
+        "tempName" : "Untitled2"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 7,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

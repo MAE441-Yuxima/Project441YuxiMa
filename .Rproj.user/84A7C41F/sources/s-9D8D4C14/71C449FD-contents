@@ -1,0 +1,79 @@
+---
+title: "Lecture 2"
+output: html_document
+---
+#0.) Packages
+```{r}
+library(jsonlite)
+library(alfred)
+#install.packages("devtools")
+library(devtools)
+#install_github("rtelmore/ballr")
+library(ballr)
+```
+
+#1.1.) FRED API Using Parameters
+```{r}
+#FRED API Key
+APIkey = "e67121f20c15f2fa5dc000b94fb6bdb0"
+series_id = "GNPCA"
+# series_id = c("GNPCA", "CPIAUCSL")
+observation_start = "1990-01-01"
+
+fred_get_series <- function(APIkey, series_id, observation_start){
+  URL = "https://api.stlouisfed.org/fred/series/observations"
+  
+  parameters = paste(
+    "?series_id=",series_id,
+    "&api_key=", APIkey,
+    "&file_type=json",
+    "&observation_start=",observation_start,
+    sep = "")
+  PATH = paste0(URL, parameters)
+  
+  initialquery = fromJSON(PATH)
+  df = initialquery$observations
+  rownames(df) <- df$date  #Change index to a Date
+  
+  df = df[c("value")] # Just use value column
+  df$value <- as.numeric(df$value) #change characters to numbers
+  
+  return(df)
+}
+
+```
+
+#1.) FRED API as a Function
+```{r}
+APIkey = "e67121f20c15f2fa5dc000b94fb6bdb0"
+series_id = "CPIAUCSL"
+observation_start = "1980-01-01"
+
+fred_get_series(APIkey, series_id, observation_start)
+
+```
+#2.) API Wrapper
+```{r}
+series_id = "CPIAUCSL"
+observation_start = "1980-01-01"
+alfred::get_fred_series(series_id, observation_start = observation_start)
+
+```
+
+#3.) Mock API Ballr
+```{r}
+df1 = ballr::NBAPerGameStatisticsPer36Min(season = 2018)
+df1$year = 2018 # Make a column with the year
+
+df2 = ballr::NBAPerGameStatisticsPer36Min(season = 2019)
+df2$year = 2019 # Make a column with the year
+
+df = rbind(df1, df2) #Attach these together
+df
+```
+
+
+
+
+
+

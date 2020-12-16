@@ -1,0 +1,35 @@
+---
+title: "Lecture 3"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(covid19.analytics)
+library(dplyr)
+library(VIM)
+```
+
+```{r}
+
+
+get_current_covid_data = function()
+{
+  covid_df_raw = covid19.data()
+  
+  covid_df = covid_df_raw %>%
+  select(Country_Region,Confirmed,Deaths, Recovered, Active) %>%
+  group_by(Country_Region) %>%
+  summarize(Active_agg = sum(Active),
+            Deaths_agg = sum(Deaths),
+            Recovered_agg = sum(Recovered),
+            Confirmed_agg = sum(Confirmed)) %>%
+  mutate(Death_rate = Deaths_agg / (Deaths_agg + Recovered_agg))
+
+  return(covid_df)
+}
+
+
+
+get_current_covid_data()
+```

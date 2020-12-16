@@ -1,0 +1,21 @@
+"0","```r
+
+# In June of each year, all NYSE stocks are ranked on size to get the median
+tbl.size_breakpoints <- stocks %>%
+  filter(month(date) == 6 & exchange == \"NYSE\") %>%
+  select(reference_date, mktcap) %>%
+  group_by(reference_date) %>%
+  summarize(size_median = median(mktcap))
+
+# Also in June, all stocks are sorted into 2 portfolios
+tbl.size_sorts <- stocks %>%
+  filter(month(date) == 6) %>%
+  left_join(tbl.size_breakpoints, by = \"reference_date\") %>%
+  mutate(size_portfolio = case_when(mktcap > size_median ~ \"B\",
+                                    mktcap <= size_median ~ \"S\",
+                                    TRUE ~ as.character(NA))) %>%
+  select(permno, reference_date, size_portfolio)
+
+# Add size portfolio assignment back to stock data
+stocks <- left_join(stocks, tbl.size_sorts, by = c(\"permno\", \"reference_date\"))
+```"

@@ -1,0 +1,507 @@
+---
+title: "Creating Fama French Factors"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r warning = FALSE}
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(zoo))
+suppressPackageStartupMessages(require(data.table))
+suppressPackageStartupMessages(library(lubridate))# for working with dates
+suppressPackageStartupMessages(library(kableExtra)) # for nicer html tables
+suppressPackageStartupMessages(library(DBI)) #need this for the dbSendQuery function
+
+
+### WRDS CONNECTION ###
+
+library(RPostgres) #this is just an interface for DBI, so you don't really need DBI
+wrds <- dbConnect(Postgres(), #this just says to use the postgress package
+                  host='wrds-pgdata.wharton.upenn.edu',
+                  port=9737,
+                  user='econ442a',
+                  password='borghese442a',
+                  dbname='wrds',
+                  sslmode='require') #this just says that 
+```
+
+
+
+#Cleaning the CRSP Data
+
+```{r warning = FALSE, message=FALSE}
+
+
+#LET'S FIRST GET ALL THE CRSP  DATA and Merge them together
+
+### LOAD CRSP FROM WRDS ###
+
+# SLOW CODE (30 mins)
+crspa_msf <- dbSendQuery(wrds, "select DATE, PERMNO, PERMCO, CFACPR, CFACSHR, SHROUT, PRC, RET, RETX, VOL
+                         from CRSP.MSF")
+
+crsp.msf <- dbFetch(crspa_msf, n = -1) 
+
+
+crspa_mse <- dbSendQuery(wrds, "select DATE, PERMNO, SHRCD, EXCHCD, SICCD
+                   from CRSP.MSE")
+
+crsp.mse <- dbFetch(crspa_mse, n = -1)
+
+
+crspq.msedelist <- dbSendQuery(wrds, "select DLSTDT, PERMNO, dlret, dlstcd
+                   from crspq.msedelist")
+#                   where dlret is not null")
+crsp.msedelist <- dbFetch(crspq.msedelist, n = -1)
+
+
+# clean and marge data
+crsp.msf <- crsp.msf %>%
+ drop_na(prc)%>%
+  mutate(date = as.Date(date))
+
+crsp.mse <- crsp.mse %>%
+  drop_na(shrcd)%>%
+  mutate(date = as.Date(date)) 
+
+crsp.msedelist <- crsp.msedelist %>%
+  drop_na(dlret)%>%
+  mutate(date = as.Date(dlstdt)) 
+
+
+
+
+data.crsp.total <- crsp.msf %>%
+  merge(crsp.mse, by=c("date", "permno"), all=TRUE, allow.cartesian=TRUE) %>%
+  merge(crsp.msedelist, by=c("date", "permno"), all=TRUE, allow.cartesian=TRUE) %>%
+  arrange(date, permno) %>%
+  group_by(permno) %>%    
+  mutate_at(vars(shrcd, exchcd), funs(na.locf(., na.rm=FALSE)))%>% # fill in NA's with latest available (must sort by Date and group by PERMNO)
+  ungroup() 
+
+```
+
+
+
+
+
+```{r warning = FALSE, message=FALSE}
+library(dplyr)
+
+# parse only relevant variables
+crsp <- data.crsp.total %>%
+  transmute(permno = as.integer(permno),     # security identifier# keep only US-based common stocks (10 and 11)
+              date = ymd(date),                # month identifier
+            ret = as.numeric(ret) * 100,     # return (converted to percent)
+            shrout = as.numeric(shrout),     # shares outstanding (in thousands)
+            altprc = as.numeric(prc),     # last traded price in a month ##
+            exchcd = as.integer(exchcd),     # exchange code
+            shrcd = as.integer(shrcd),       # share code
+            siccd = as.integer(siccd),       # industry code
+            dlret = as.numeric(dlret) * 100, # delisting return (converted to percent)
+            dlstcd = as.integer(dlstcd)      # delisting code   
+  )
+
+
+```
+
+
+
+```{r warning = FALSE, message=FALSE}
+
+# analysis of fama french (1993) starts in 1963 so I only need data after 1962
+crsp <- crsp %>%
+  filter(date >= "1963-01-01")
+
+# keep only US-based common stocks (10 and 11)
+crsp <- crsp %>%
+  filter(shrcd %in% c(10, 11)) %>%
+  select(-shrcd)
+
+# keep only distinct observations to avoid multiple counting
+crsp <- crsp %>%
+  distinct()
+
+# compute market cap
+# note: altprc is the negative of average of bid and ask from last traded price
+#       for which the data is available if there is no last traded price
+crsp <- crsp %>%
+  mutate(mktcap = abs(shrout * altprc) / 1000, # in millions of dollars
+         mktcap = if_else(mktcap == 0, as.numeric(NA), mktcap)) 
+
+
+# define exchange labels and keep only NYSE, AMEX and NASDAQ stocks
+crsp <- crsp %>%
+  mutate(exchange = case_when(exchcd %in% c(1, 31) ~ "NYSE",
+                              exchcd %in% c(2, 32) ~ "AMEX",
+                              exchcd %in% c(3, 33) ~ "NASDAQ",
+                              TRUE ~ "Other")) %>%
+  filter(exchange != "Other")
+
+# adjust delisting returns 
+crsp <- crsp %>%
+  mutate(ret_adj = case_when(!is.na(dlret) ~ dlret,
+                             is.na(dlret) & !is.na(dlstcd) ~ -100,
+                             is.na(dlret) & (dlstcd %in% c(500, 520, 580, 584) | 
+                                               (dlstcd >= 551 & dlstcd <= 574)) ~ -30,
+                             TRUE ~ ret)) %>%
+  select(-c(dlret, dlstcd))
+
+```
+
+
+#Cleaning the Compustat Data
+
+
+
+
+
+```{r warning = FALSE, message=FALSE}
+
+#Now let's focus on the data from Compustat
+
+# retrieve Compustat annual data (takes 10mins each below)
+comp1 <- dbSendQuery(wrds,"select GVKEY, CUSIP, DATADATE, FYR, FYEAR, SICH, NAICSH,
+                            AT, LT, SEQ, CEQ, PSTKL, PSTKRV, PSTK, TXDITC, TXDB, ITCB,
+                            REVT, COGS, XINT, XSGA, IB, TXDI, DVC, ACT, CHE, LCT,
+                            DLC, TXP, DP, PPEGT, INVT 
+                    from COMP.FUNDA
+                    where INDFMT='INDL' and DATAFMT='STD' and CONSOL='C' and POPSRC='D'") # STD is unrestatd data
+data.comp.funda <- dbFetch(comp1, n = -1) # n=-1 denotes no max but retrieve all record
+
+
+
+# retrieve Compustat quarterly data, to get quarterly add "Q' to the end of the variables
+comp2 <- dbSendQuery(wrds,"select GVKEY, CUSIP, DATADATE, FYR, FYEARQ,
+                            ATQ, LTQ, SEQQ, CEQQ, PSTKRQ, PSTKQ, TXDITCQ, TXDBQ,
+                            REVTQ, COGSQ, XINTQ, XSGAQ, IBQ, TXDIQ, ACTQ, CHEQ, LCTQ,
+                            DLCQ, TXPQ, DPQ, PPEGTQ, INVTQ, EPSPXQ, RDQ
+                           from COMPM.FUNDQ
+                           where INDFMT='INDL' and DATAFMT='STD' and CONSOL='C' and POPSRC='D'") # STD is unrestatd data
+data.comp.fundq <- dbFetch(comp2, n = -1) # n=-1 denotes no max but retrieve all record
+
+
+# retrieve Merged Compustat/CRSP link table
+comp3<- dbSendQuery(wrds,"select GVKEY, LPERMNO, LINKDT, LINKENDDT, LINKTYPE, LINKPRIM
+                    from crsp.ccmxpf_lnkhist")
+data.ccmlink <- dbFetch(comp3, n = -1) 
+
+
+# Merge the linked Permno onto Compustat dataset
+
+data.ccm <-  data.ccmlink %>%
+  # use only primary links (from WRDS Merged Compustat/CRSP examples)
+  filter(linktype %in% c("LU", "LC", "LS")) %>%
+  filter(linkprim %in% c("P", "C", "J")) %>%
+  merge(data.comp.funda, by="gvkey") %>% # inner join, keep only if permno exists
+  mutate(datadate = as.Date(datadate), 
+         permno = as.factor(lpermno),
+         linkdt = as.Date(linkdt),
+         linkenddt = as.Date(linkenddt),
+         linktype = factor(linktype, levels=c("LC", "LU", "LS")),
+         linkprim = factor(linkprim, levels=c("P", "C", "J"))) %>%
+  # remove compustat fiscal ends that do not fall within linked period; linkenddt=NA (from .E) means ongoing  
+  filter(datadate >= linkdt & (datadate <= linkenddt | is.na(linkenddt))) %>%
+  # prioritize linktype, linkprim based on order of preference/primary if duplicate
+  arrange(datadate, permno, linktype, linkprim) %>%
+  distinct(datadate, permno, .keep_all = TRUE)
+
+
+```
+
+
+```{r warning = FALSE, message=FALSE}
+
+
+# select and parse relevant variables
+compustat <- data.ccm %>%
+  transmute(
+    gvkey = as.integer(gvkey),         # firm identifier
+    permno = as.integer(lpermno),      # stock identifier
+    datadate = ymd(datadate),          # date of report
+    linktype = as.character(linktype), # link type
+    linkenddt = ymd(linkenddt),        # date when link ends to be valid
+    seq = as.numeric(seq),             # stockholders' equity
+    ceq = as.numeric(ceq),             # total common/ordinary equity
+    at = as.numeric(at),               # total assets
+    lt = as.numeric(lt),               # total liabilities
+    txditc = as.numeric(txditc),       # deferred taxes and investment tax credit
+    txdb = as.numeric(txdb),           # deferred taxes
+    itcb = as.numeric(itcb),           # investment tax credit
+    pstkrv = as.numeric(pstkrv),       # preferred stock redemption value
+    pstkl = as.numeric(pstkl),         # preferred stock liquidating value
+    pstk = as.numeric(pstk)           # preferred stock par value
+    #indfmt = as.character(indfmt),     # industry format, you would do this if you haven't already done this when you obtained the data
+    #datafmt = as.character(datafmt)    # data format, you would do this if you haven't already done this when you obtained the data
+  ) 
+
+
+```
+
+
+
+
+
+
+```{r warning = FALSE, message=FALSE}
+# make sure that only correct industry and data format is used, you would do this if you haven't already done this when you obtained the data
+#compustat <- compustat %>%
+#  filter(indfmt == "INDL" & datafmt == "STD") %>%
+ # select(-c(indfmt, datafmt))
+
+# check that only valid links are used
+compustat <- compustat %>%
+  filter(linktype %in% c("LU", "LC"))
+
+# check that links are still active at time of information release
+compustat <- compustat %>%
+  filter(datadate <= linkenddt | is.na(linkenddt))
+
+# keep only distinct observations
+compustat <- compustat %>%
+  distinct()
+
+# calculate book value of preferred stock and equity
+compustat <- compustat %>%
+  mutate(be = coalesce(seq, ceq + pstk, at - lt) + 
+           coalesce(txditc, txdb + itcb, 0) - 
+           coalesce(pstkrv, pstkl, pstk, 0),
+         be = if_else(be < 0, as.numeric(NA), be)) %>%
+  select(gvkey, permno, datadate, be) 
+
+# determine year for matching and keep only one obs per year
+compustat <- compustat %>%
+  mutate(year = year(datadate)) %>%
+  group_by(permno, year) %>%
+  filter(datadate == max(datadate)) %>%
+  ungroup()
+
+# keep only observations once a firm has been included for two years
+compustat <- compustat %>%
+  group_by(gvkey) %>%
+  mutate(first_year = min(year)) %>%
+  ungroup() %>%
+  filter(year > first_year + 1) %>%
+  select(-gvkey)
+
+# kick out unnecessary rows with missing values
+compustat <- compustat %>%
+  na.omit()
+
+# determine reference date for matching (june of next calendar year)
+compustat <- compustat %>%
+  mutate(reference_date = ymd(paste0(year + 1, "-06-01"))) %>%
+  select(-year)
+```
+
+
+```{r warning = FALSE, message=FALSE}
+#Construct Stock Sample
+
+
+# select relevant variables
+stocks <- crsp %>%
+  select(permno, date, exchange, ret = ret_adj, mktcap) %>%
+  na.omit()
+
+# define reference date for each stock (i.e. new sorting starts in june of year y)
+stocks <- stocks %>%
+  mutate(reference_date = ymd(if_else(month(date) < 6, 
+                                      paste0(year(date) - 1, "-06-01"), 
+                                      paste0(year(date), "-06-01")))) 
+
+# add book equity data for year y-1 which is used starting in june of year y
+stocks_be <- compustat %>%
+  mutate(reference_date = ymd(paste0(year(datadate) + 1, "-06-01"))) 
+
+stocks <- stocks %>%
+  left_join(stocks_be, by = c("permno", "reference_date"))
+
+# add market equity data from the end of year y-1 which is used for bm ratio in june of year y
+stocks_me <- stocks %>%
+  filter(month(date) == 12) %>%
+  mutate(reference_date = ymd(paste0(year(date) + 1, "-06-01"))) %>%
+  select(permno, reference_date, me = mktcap)
+
+
+stocks <- stocks %>%
+  left_join(stocks_me, by = c("permno", "reference_date"))
+
+# compute book-to-market ratio
+stocks <- stocks %>%
+  mutate(bm = be / me)
+
+# add market cap of june of year y which is used for value-weighted returns
+stocks_weight <- stocks %>%
+  filter(month(date) == 6) %>%
+  select(permno, reference_date, mktcap_weight = mktcap)
+
+stocks <- left_join(stocks, stocks_weight, by = c("permno", "reference_date"))
+
+# only keep stocks that have all the necessary data 
+# (i.e. market equity data for december y-1 and june y, and book equity data for y-1)
+stocks <- stocks %>%
+  na.omit() %>%
+  filter(date >= "1963-01-01") # fama-french paper starts here
+
+
+```
+
+
+
+```{r}
+
+# In June of each year, all NYSE stocks are ranked on size to get the median
+tbl.size_breakpoints <- stocks %>%
+  filter(month(date) == 6 & exchange == "NYSE") %>%
+  select(reference_date, mktcap) %>%
+  group_by(reference_date) %>%
+  summarize(size_median = median(mktcap))
+
+# Also in June, all stocks are sorted into 2 portfolios
+tbl.size_sorts <- stocks %>%
+  filter(month(date) == 6) %>%
+  left_join(tbl.size_breakpoints, by = "reference_date") %>%
+  mutate(size_portfolio = case_when(mktcap > size_median ~ "B",
+                                    mktcap <= size_median ~ "S",
+                                    TRUE ~ as.character(NA))) %>%
+  select(permno, reference_date, size_portfolio)
+
+# Add size portfolio assignment back to stock data
+stocks <- left_join(stocks, tbl.size_sorts, by = c("permno", "reference_date"))
+```
+
+
+```{r}
+
+
+#value sorts
+
+# calculate value breakpoints using NYSE stocks
+value_breakpoints <- stocks %>%
+  filter(month(date) == 6 & exchange == "NYSE") %>%
+  select(reference_date, bm) %>%
+  group_by(reference_date) %>%
+  summarize(value_q30 = quantile(bm, 0.3),
+            value_q70 = quantile(bm, 0.7))
+
+# also in june all stocks are sorted into 3 portfolios
+value_sorts <- stocks %>%
+  filter(month(date) == 6) %>%
+  left_join(value_breakpoints, by = "reference_date") %>%
+  mutate(value_portfolio = case_when(bm > value_q70 ~ "H",
+                                     bm <= value_q70 & bm > value_q30 ~ "M", 
+                                     bm <= value_q30 ~ "L",
+                                     TRUE ~ as.character(NA)))%>%
+  select(permno, reference_date, value_portfolio)
+
+# add value portfolio assignment back to stock data
+stocks <- left_join(stocks, value_sorts, by = c("permno", "reference_date"))
+
+
+
+```
+
+
+```{r warning = FALSE, message=FALSE}
+#construct factor portfolios
+
+portfolios <- stocks %>%
+  group_by(date, size_portfolio, value_portfolio) %>%
+  summarize(ret_vw = weighted.mean(ret, mktcap_weight)) %>%
+  ungroup() %>%
+  mutate(portfolio = paste0(size_portfolio, "/", value_portfolio))
+
+factors <- portfolios %>%
+  group_by(date) %>%
+  summarize(smb = mean(ret_vw[portfolio %in% c("S/H", "S/M", "S/L")]) - 
+              mean(ret_vw[portfolio %in% c("B/H", "B/M", "B/L")]),
+            hml = mean(ret_vw[portfolio %in% c("S/H", "B/H")]) - 
+              mean(ret_vw[portfolio %in% c("S/L", "B/L")]))
+
+
+
+```
+
+
+```{r warning = FALSE, message=FALSE}
+#mkt factor
+
+factors <- factors %>%
+  left_join(stocks %>%
+              group_by(date) %>%
+              summarize(mkt = weighted.mean(ret, mktcap_weight)), by = "date") %>%
+  select(date, mkt, smb, hml) %>% # rearrange columns
+  filter(date < "2020-12-01") 
+
+
+
+```
+
+
+
+```{r warning = FALSE, message=FALSE}
+
+#let's compare them to the actual fama french factors as created by fama french
+# you can either get this from WRDS or from the fama french website. Please note that the fama french website is updated regularly and the WRDS fama french data once every few months. Just so you know how to get data from other sources via coding, I will use the fama french website. 
+
+ff_url <- "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_CSV.zip"
+
+temp_file <- tempfile()
+
+download.file(ff_url, temp_file)
+
+ff_factors_raw_data <- unzip(temp_file)
+
+ff_factors_raw_data<- read_csv(ff_factors_raw_data, skip = 3)
+
+
+ff_factors_raw_data <- ff_factors_raw_data %>%
+  transmute(date = ymd(paste0(X1, "01")),
+            rf_ff = as.numeric(RF),
+            mkt_ff = as.numeric(`Mkt-RF`) + as.numeric(RF),
+            smb_ff = as.numeric(SMB),
+            hml_ff = as.numeric(HML)) %>%
+  filter(date <= max(crsp$date)) %>%
+  mutate(date = floor_date(date, "month")) %>%
+  select(-rf_ff)
+
+#head(ff_factors_raw_data) #check to make sure everything is in order
+
+#tail(ff_factors_raw_data)  #check to make sure everything is in order
+
+
+
+all.factors <- factors %>%
+  mutate(date = floor_date(date, "month")) %>%
+  left_join(ff_factors_raw_data, by = "date")
+
+
+
+```
+
+
+
+
+
+
+```{r warning = FALSE, message=FALSE}
+compute_correlations <- function(data, ..., upper = TRUE) {
+  cor_matrix <- data %>%
+    select(...) %>%
+    cor(use = "complete.obs", method = "pearson") 
+  
+  return(cor_matrix)
+}
+tab.correlations <- compute_correlations(all.factors, mkt, mkt_ff, smb, smb_ff, hml, hml_ff) %>% 
+  kable(digits = 2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+tab.correlations
+
+```
+
+
+

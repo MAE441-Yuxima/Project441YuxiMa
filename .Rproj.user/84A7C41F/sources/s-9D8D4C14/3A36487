@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1608084313600.000,
+    "dirty" : true,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "3A36487",
+    "lastKnownWriteTime" : 1608109569,
+    "last_content_update" : 1608110987924,
+    "path" : "~/Project441YuxiMa/R/get_fred.R",
+    "project_path" : "R/get_fred.R",
+    "properties" : {
+        "cursorPosition" : "37,26",
+        "scrollLine" : "21",
+        "tempName" : "Untitled2"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

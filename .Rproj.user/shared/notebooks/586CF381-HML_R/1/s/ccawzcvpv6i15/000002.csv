@@ -1,0 +1,13 @@
+"0","```r
+#mkt factor
+
+factors <- factors %>%
+  left_join(stocks %>%
+              group_by(date) %>%
+              summarize(mkt = weighted.mean(ret, mktcap_weight)), by = \"date\") %>%
+  select(date, mkt, smb, hml) %>% # rearrange columns
+  filter(date < \"2020-12-01\") 
+
+
+
+```"

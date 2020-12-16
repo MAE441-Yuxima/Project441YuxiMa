@@ -1,0 +1,51 @@
+"0","```r
+#Construct Stock Sample
+
+
+# select relevant variables
+stocks <- crsp %>%
+  select(permno, date, exchange, ret = ret_adj, mktcap) %>%
+  na.omit()
+
+# define reference date for each stock (i.e. new sorting starts in june of year y)
+stocks <- stocks %>%
+  mutate(reference_date = ymd(if_else(month(date) < 6, 
+                                      paste0(year(date) - 1, \"-06-01\"), 
+                                      paste0(year(date), \"-06-01\")))) 
+
+# add book equity data for year y-1 which is used starting in june of year y
+stocks_be <- compustat %>%
+  mutate(reference_date = ymd(paste0(year(datadate) + 1, \"-06-01\"))) 
+
+stocks <- stocks %>%
+  left_join(stocks_be, by = c(\"permno\", \"reference_date\"))
+
+# add market equity data from the end of year y-1 which is used for bm ratio in june of year y
+stocks_me <- stocks %>%
+  filter(month(date) == 12) %>%
+  mutate(reference_date = ymd(paste0(year(date) + 1, \"-06-01\"))) %>%
+  select(permno, reference_date, me = mktcap)
+
+
+stocks <- stocks %>%
+  left_join(stocks_me, by = c(\"permno\", \"reference_date\"))
+
+# compute book-to-market ratio
+stocks <- stocks %>%
+  mutate(bm = be / me)
+
+# add market cap of june of year y which is used for value-weighted returns
+stocks_weight <- stocks %>%
+  filter(month(date) == 6) %>%
+  select(permno, reference_date, mktcap_weight = mktcap)
+
+stocks <- left_join(stocks, stocks_weight, by = c(\"permno\", \"reference_date\"))
+
+# only keep stocks that have all the necessary data 
+# (i.e. market equity data for december y-1 and june y, and book equity data for y-1)
+stocks <- stocks %>%
+  na.omit() %>%
+  filter(date >= \"1963-01-01\") # fama-french paper starts here
+
+
+```"
